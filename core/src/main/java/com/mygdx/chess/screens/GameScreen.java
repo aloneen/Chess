@@ -14,42 +14,46 @@ public class GameScreen implements Screen {
     private final OrthographicCamera camera;
     private final ChessBoard chessBoard;
 
+    // Existing constructor creates a new board.
     public GameScreen(ChessGame game) {
         batch = new SpriteBatch();
         camera = new OrthographicCamera();
         camera.setToOrtho(false, 800, 800);
-
         chessBoard = new ChessBoard();
+        Gdx.input.setInputProcessor(new ChessInputProcessor(game, chessBoard, camera));
+    }
 
-        // Now pass game, chessBoard and camera to the input processor.
+    // New constructor that accepts an existing chess board (to preserve state after promotion).
+    public GameScreen(ChessGame game, ChessBoard board) {
+        batch = new SpriteBatch();
+        camera = new OrthographicCamera();
+        camera.setToOrtho(false, 800, 800);
+        chessBoard = board;
         Gdx.input.setInputProcessor(new ChessInputProcessor(game, chessBoard, camera));
     }
 
     @Override
     public void render(float delta) {
-        // Update logic
         chessBoard.update(delta);
-
         Gdx.gl.glClearColor(1f, 1f, 1f, 1f);
         Gdx.gl.glClear(GL20.GL_COLOR_BUFFER_BIT);
-
         camera.update();
         batch.setProjectionMatrix(camera.combined);
-
         batch.setColor(1f, 1f, 1f, 0.7f);
-
         batch.begin();
         chessBoard.render(batch);
         batch.end();
     }
 
-    @Override public void resize(int width, int height) { /* handle resizing */ }
+    @Override public void resize(int width, int height) { }
     @Override public void show() { }
     @Override public void hide() { }
     @Override public void pause() { }
     @Override public void resume() { }
-    @Override public void dispose() {
+    @Override
+    public void dispose() {
         batch.dispose();
         chessBoard.dispose();
     }
+
 }
