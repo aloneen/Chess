@@ -4,6 +4,8 @@ import com.badlogic.gdx.Gdx;
 import com.badlogic.gdx.graphics.Texture;
 import com.badlogic.gdx.graphics.g2d.SpriteBatch;
 
+import java.util.Objects;
+
 public class ChessPiece {
     private String color;
     private String type;
@@ -31,6 +33,32 @@ public class ChessPiece {
 
     public void dispose() {
         texture.dispose();
+    }
+
+
+
+    @Override
+    public ChessPiece clone() {
+        ChessPiece copy = new ChessPiece(this.getColor(), this.getType(), this.getXPos(), this.getYPos());
+        copy.setHasMoved(this.hasMoved());
+        return copy;
+    }
+
+    @Override
+    public boolean equals(Object obj) {
+        if (!(obj instanceof ChessPiece)) return false;
+        ChessPiece other = (ChessPiece) obj;
+        // Compare based on color, type, and current coordinates.
+        return this.getColor().equals(other.getColor()) &&
+            this.getType().equalsIgnoreCase(other.getType()) &&
+            this.getXPos() == other.getXPos() &&
+            this.getYPos() == other.getYPos();
+    }
+
+
+    @Override
+    public int hashCode() {
+        return Objects.hash(color, type, xPos, yPos, texture, hasMoved);
     }
 
     // When the position changes, mark the piece as having moved.
