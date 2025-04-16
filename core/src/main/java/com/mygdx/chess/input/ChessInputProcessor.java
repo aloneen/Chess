@@ -16,12 +16,11 @@ import java.util.Iterator;
 import java.util.List;
 
 public class ChessInputProcessor implements InputProcessor {
-    private ChessGame game; // Reference to the main game instance.
+    private ChessGame game;
     private ChessBoard chessBoard;
     private OrthographicCamera camera;
     private ChessPiece selectedPiece = null;
 
-    // Constructor now accepts the ChessGame instance, ChessBoard, and camera.
     public ChessInputProcessor(ChessGame game, ChessBoard board, OrthographicCamera camera) {
         this.game = game;
         this.chessBoard = board;
@@ -35,75 +34,124 @@ public class ChessInputProcessor implements InputProcessor {
         int boardY = (int)(worldCoordinates.y / ChessBoard.SQUARE_SIZE);
 
         if (selectedPiece == null) {
+            // Select a piece and show possible moves
             for (ChessPiece piece : chessBoard.getPieces()) {
                 if (piece.getXPos() == boardX && piece.getYPos() == boardY) {
                     selectedPiece = piece;
-                    List<Move> moves = chessBoard.getGameLogic().getPossibleMoves(selectedPiece, chessBoard.getPieces());
+                    List<Move> moves = chessBoard.getGameLogic()
+                        .getPossibleMoves(selectedPiece, chessBoard.getPieces());
                     chessBoard.setPossibleMoves(moves);
                     return true;
                 }
             }
         } else {
             GameLogic logic = chessBoard.getGameLogic();
+            int originalX = selectedPiece.getXPos();
+            int originalY = selectedPiece.getYPos();
+
             if (logic.isValidMove(selectedPiece, boardX, boardY, chessBoard.getPieces())) {
-                // Handle castling.
-                if (selectedPiece.getType().equalsIgnoreCase("king") && Math.abs(boardX - selectedPiece.getXPos()) == 2) {
-                    int startX = selectedPiece.getXPos();
-                    int startY = selectedPiece.getYPos();
-                    if (boardX > startX) { // kingside castling
+                // ---- handle castling ----
+                if (selectedPiece.getType().equalsIgnoreCase("king") &&
+                    Math.abs(boardX - originalX) == 2) {
+                    int startY = originalY;
+                    if (boardX > originalX) {
+                        // kingside
                         ChessPiece rook = findPieceAt(7, startY, selectedPiece.getColor());
-                        if (rook != null) {
-                            rook.setPosition(startX + 1, startY);
-                        }
-                    } else { // queenside castling
+                        if (rook != null) rook.setPosition(originalX + 1, startY);
+                    } else {
+                        // queenside
                         ChessPiece rook = findPieceAt(0, startY, selectedPiece.getColor());
-                        if (rook != null) {
-                            rook.setPosition(startX - 1, startY);
+                        if (rook != null) rook.setPosition(originalX - 1, startY);
+                    }
+                }
+
+                // ---- detect en passant capture ----
+                boolean isEnPassant = false;
+                if (selectedPiece.getType().equalsIgnoreCase("pawn") &&
+                    Math.abs(boardX - originalX) == 1 &&
+                    boardY == logic.getEnPassantTargetY() &&
+                    boardX == logic.getEnPassantTargetX()) {
+                    isEnPassant = true;
+                }
+
+                // ---- perform capture ----
+                if (!isEnPassant) {
+                    // normal capture
+                    Iterator<ChessPiece> iter = chessBoard.getPieces().iterator();
+                    while (iter.hasNext()) {
+                        ChessPiece p = iter.next();
+                        if (p.getXPos() == boardX && p.getYPos() == boardY &&
+                            !p.getColor().equals(selectedPiece.getColor())) {
+                            iter.remove();
+                            break;
+                        }
+                    }
+                } else {
+                    // remove the pawn that moved two squares last turn
+                    int capturedPawnY = selectedPiece.getColor().equalsIgnoreCase("white")
+                        ? boardY - 1
+                        : boardY + 1;
+                    Iterator<ChessPiece> iter = chessBoard.getPieces().iterator();
+                    while (iter.hasNext()) {
+                        ChessPiece p = iter.next();
+                        if (p.getXPos() == boardX && p.getYPos() == capturedPawnY) {
+                            iter.remove();
+                            break;
                         }
                     }
                 }
-                // Capture logic.
-                Iterator<ChessPiece> iter = chessBoard.getPieces().iterator();
-                while (iter.hasNext()) {
-                    ChessPiece piece = iter.next();
-                    if (piece.getXPos() == boardX && piece.getYPos() == boardY &&
-                        !piece.getColor().equals(selectedPiece.getColor())) {
-                        iter.remove();
-                        break;
-                    }
-                }
-                // Move the selected piece.
+
+                // ---- move the selected piece ----
                 selectedPiece.setPosition(boardX, boardY);
 
-                // Check for pawn promotion.
-                if(selectedPiece.getType().equalsIgnoreCase("pawn") &&
+                // ---- promotion check ----
+                if (selectedPiece.getType().equalsIgnoreCase("pawn") &&
                     ((selectedPiece.getColor().equalsIgnoreCase("white") && boardY == 7) ||
                         (selectedPiece.getColor().equalsIgnoreCase("black") && boardY == 0))) {
-                    // Switch to the promotion selection screen.
                     game.setScreen(new PromotionScreen(game, chessBoard, selectedPiece));
                     selectedPiece = null;
                     chessBoard.setPossibleMoves(null);
                     return true;
                 }
 
-                // No promotion: toggle turn and check for game end.
+                // ---- set or clear en passant target ----
+                if (selectedPiece.getType().equalsIgnoreCase("pawn") &&
+                    Math.abs(boardY - originalY) == 2) {
+                    // pawn moved two squares: record the square it jumped over
+                    int targetY = selectedPiece.getColor().equalsIgnoreCase("white")
+                        ? originalY + 1
+                        : originalY - 1;
+                    logic.setEnPassantTarget(originalX, targetY, selectedPiece);
+                } else {
+                    // any other move clears the old en passant target
+                    logic.clearEnPassantTarget();
+                }
+
+                // ---- toggle turn and check for game end ----
                 logic.toggleTurn();
                 String currentTurnColor = logic.isWhiteTurn() ? "white" : "black";
                 if (logic.isCheckmate(currentTurnColor, chessBoard.getPieces())) {
                     String winner = currentTurnColor.equals("white") ? "Black" : "White";
                     game.setScreen(new GameOverScreen(game, "Checkmate! " + winner + " wins."));
-                    return true;
                 } else if (logic.isStalemate(currentTurnColor, chessBoard.getPieces())) {
                     game.setScreen(new GameOverScreen(game, "Stalemate! The game is a draw."));
-                    return true;
                 }
+
+                // clear selection and move hints
+                selectedPiece = null;
+                chessBoard.setPossibleMoves(null);
+                return true;
             }
+
+            // invalid move: deselect
             selectedPiece = null;
             chessBoard.setPossibleMoves(null);
             return true;
         }
+
         return true;
     }
+
 
     @Override public boolean touchUp(int screenX, int screenY, int pointer, int button) { return false; }
     @Override public boolean touchCancelled(int i, int i1, int i2, int i3) { return false; }
@@ -121,5 +169,4 @@ public class ChessInputProcessor implements InputProcessor {
         }
         return null;
     }
-
 }

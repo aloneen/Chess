@@ -9,10 +9,35 @@ public class GameLogic {
     private ChessPiece[][] board;
     private boolean whiteTurn;
 
+    // --- New en passant fields ---
+    // These fields record the target square (the square "jumped over")
+    // and the pawn that just moved two squares (and is vulnerable to en passant).
+    private int enPassantTargetX = -1;
+    private int enPassantTargetY = -1;
+    private ChessPiece enPassantVulnerablePawn = null;
+
     public GameLogic() {
         board = new ChessPiece[8][8];
         whiteTurn = true;
     }
+
+    // --- En passant getters/setters ---
+    public void setEnPassantTarget(int x, int y, ChessPiece pawn) {
+        this.enPassantTargetX = x;
+        this.enPassantTargetY = y;
+        this.enPassantVulnerablePawn = pawn;
+    }
+
+    public void clearEnPassantTarget() {
+        this.enPassantTargetX = -1;
+        this.enPassantTargetY = -1;
+        this.enPassantVulnerablePawn = null;
+    }
+
+    public int getEnPassantTargetX() { return enPassantTargetX; }
+    public int getEnPassantTargetY() { return enPassantTargetY; }
+    public ChessPiece getEnPassantVulnerablePawn() { return enPassantVulnerablePawn; }
+    // ------------------------------------
 
     /**
      * Rebuilds the board array from the supplied list of pieces.
@@ -24,13 +49,6 @@ public class GameLogic {
             int y = piece.getYPos();
             board[x][y] = piece;
         }
-
-        // (Optional Debug)
-        // System.out.println("=== Board State ===");
-        // for (ChessPiece piece : pieces) {
-        //     System.out.println(piece.getColor() + " " + piece.getType() +
-        //                        " at " + piece.getXPos() + ", " + piece.getYPos());
-        // }
     }
 
     /**
@@ -110,8 +128,21 @@ public class GameLogic {
         }
 
         // Diagonal capture.
-        if (Math.abs(destX - startX) == 1 && (destY - startY) == direction)
-            return board[destX][destY] != null && !board[destX][destY].getColor().equals(color);
+        if (Math.abs(destX - startX) == 1 && (destY - startY) == direction) {
+            // Normal capture.
+            if (board[destX][destY] != null && !board[destX][destY].getColor().equals(color))
+                return true;
+            // Check for en passant capture.
+            if (board[destX][destY] == null && destX == enPassantTargetX && destY == enPassantTargetY) {
+                // For white capturing en passant, pawn must be on row enPassantTargetY - 1.
+                if (color.equalsIgnoreCase("white") && startY == enPassantTargetY - 1)
+                    return true;
+                // For black capturing en passant, pawn must be on row enPassantTargetY + 1.
+                if (color.equalsIgnoreCase("black") && startY == enPassantTargetY + 1)
+                    return true;
+            }
+            return false;
+        }
 
         return false;
     }
@@ -151,7 +182,7 @@ public class GameLogic {
 
         // Normal one-square moves.
         if (dx <= 1 && dy <= 1)
-            return true; // Later, the king safety simulation will prevent moving next to enemy king.
+            return true; // King safety simulation later will prevent moving next to enemy king.
 
         // Castling: King must move exactly two squares horizontally.
         if (dx == 2 && dy == 0) {
@@ -187,9 +218,6 @@ public class GameLogic {
     /**
      * Simulation method: returns true if moving the piece to (destX, destY)
      * would leave its own king in check.
-     *
-     * This method creates a deep copy of the pieces, simulates the move, and then uses
-     * our attack detection (isSquareAttacked) to decide whether the king is attacked.
      */
     private boolean wouldKingBeInCheckAfterMove(ChessPiece movingPiece, int destX, int destY, List<ChessPiece> pieces) {
         List<ChessPiece> simPieces = deepCopyPieces(pieces);
@@ -197,13 +225,13 @@ public class GameLogic {
         // Locate the copy of the moving piece in simPieces.
         ChessPiece simMoving = null;
         for (ChessPiece cp : simPieces) {
-            if (cp.equals(movingPiece)) {  // equals() compares color, type, and position.
+            if (cp.equals(movingPiece)) {
                 simMoving = cp;
                 break;
             }
         }
         if (simMoving == null)
-            return false; // Should not happen.
+            return false;
 
         // Remove any piece (other than simMoving) occupying (destX, destY).
         for (int i = 0; i < simPieces.size(); i++) {
@@ -214,7 +242,7 @@ public class GameLogic {
             }
         }
 
-        // Simulate moving the piece.
+        // Simulate the move.
         simMoving.setPosition(destX, destY);
 
         // Find the king of the moving piece’s color in simPieces.
@@ -226,22 +254,22 @@ public class GameLogic {
             }
         }
         if (king == null)
-            return false; // Should not happen.
+            return false;
 
-        // Instead of looping through enemy moves, simply use our updated attack detection.
+        // Use updated attack detection.
         return isSquareAttacked(king.getXPos(), king.getYPos(), king.getColor(), simPieces);
     }
 
-    // ---------- Helper: Create a deep copy of the list of pieces ----------
+    // ---------- Helper: Create a deep copy of pieces ----------
     private List<ChessPiece> deepCopyPieces(List<ChessPiece> pieces) {
         List<ChessPiece> copy = new ArrayList<>();
         for (ChessPiece piece : pieces) {
-            copy.add(piece.clone());  // Assumes ChessPiece.clone() is implemented.
+            copy.add(piece.clone());
         }
         return copy;
     }
 
-    // ---------- Helper: Find a piece at (x, y) of the given color ----------
+    // ---------- Helper: Find a piece at (x,y) with matching color from a list ----------
     private ChessPiece findPieceAt(int x, int y, String color, List<ChessPiece> pieces) {
         for (ChessPiece p : pieces) {
             if (p.getXPos() == x && p.getYPos() == y && p.getColor().equals(color)) {
@@ -253,8 +281,6 @@ public class GameLogic {
 
     /**
      * Helper method for attack detection.
-     * Determines whether the given piece can attack the square (destX, destY)
-     * based solely on its inherent movement rules—ignoring whether moving it would expose its own king.
      */
     private boolean canPieceAttackSquare(ChessPiece piece, int destX, int destY, List<ChessPiece> pieces) {
         updateBoardState(pieces);
@@ -264,7 +290,6 @@ public class GameLogic {
 
         switch (type) {
             case "pawn":
-                // For attacks, pawns strike diagonally.
                 int direction = piece.getColor().equals("white") ? 1 : -1;
                 return (destY - startY == direction && Math.abs(destX - startX) == 1);
             case "knight":
@@ -292,9 +317,7 @@ public class GameLogic {
     }
 
     /**
-     * Determines whether a given square is attacked by any enemy piece.
-     * Uses canPieceAttackSquare to decide whether an enemy piece has the inherent ability
-     * to reach the target square.
+     * Determines whether a square is attacked by any enemy piece.
      */
     public boolean isSquareAttacked(int x, int y, String defendingColor, List<ChessPiece> pieces) {
         for (ChessPiece p : pieces) {
@@ -307,10 +330,6 @@ public class GameLogic {
     }
 
     // ---------- King safety checks ----------
-
-    /**
-     * Returns true if the king of the given color is currently under attack.
-     */
     public boolean isKingInCheck(String color, List<ChessPiece> pieces) {
         ChessPiece king = null;
         for (ChessPiece p : pieces) {
@@ -324,7 +343,7 @@ public class GameLogic {
         return isSquareAttacked(king.getXPos(), king.getYPos(), color, pieces);
     }
 
-    // ---------- Path Clearance (for sliding pieces) ----------
+    // ---------- Path Clearance ----------
     private boolean isPathClear(int startX, int startY, int destX, int destY) {
         int dx = Integer.compare(destX, startX);
         int dy = Integer.compare(destY, startY);
@@ -341,6 +360,9 @@ public class GameLogic {
     // ---------- Turn Management ----------
     public void toggleTurn() {
         whiteTurn = !whiteTurn;
+        // En passant is valid only on the move immediately following a double pawn move.
+        // Clear the en passant target at turn end.
+//        clearEnPassantTarget();
     }
 
     public boolean isWhiteTurn() {
