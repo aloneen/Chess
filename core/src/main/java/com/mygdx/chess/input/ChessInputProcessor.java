@@ -9,6 +9,7 @@ import com.mygdx.chess.actors.ChessBoard;
 import com.mygdx.chess.actors.ChessPiece;
 import com.mygdx.chess.logic.GameLogic;
 import com.mygdx.chess.logic.Move;
+import com.mygdx.chess.screens.GameOverScreen;
 
 
 import java.util.Iterator;
