@@ -1,3 +1,4 @@
+// ChessPiece.java
 package com.mygdx.chess.actors;
 
 import com.badlogic.gdx.Gdx;
@@ -23,19 +24,14 @@ public class ChessPiece {
         texture = new Texture(Gdx.files.internal("images/" + color + "_" + type + ".png"));
     }
 
-    public void render(SpriteBatch batch, int squareSize) {
-        float pieceSize = squareSize * 0.8f;
-        float offset = (squareSize - pieceSize) / 2f;
-        float pixelX = xPos * squareSize + offset;
-        float pixelY = yPos * squareSize + offset;
-        batch.draw(texture, pixelX, pixelY, pieceSize, pieceSize);
+    // Expose the texture so ChessBoard can draw at flipped coords
+    public Texture getTexture() {
+        return texture;
     }
 
     public void dispose() {
         texture.dispose();
     }
-
-
 
     @Override
     public ChessPiece clone() {
@@ -48,20 +44,17 @@ public class ChessPiece {
     public boolean equals(Object obj) {
         if (!(obj instanceof ChessPiece)) return false;
         ChessPiece other = (ChessPiece) obj;
-        // Compare based on color, type, and current coordinates.
-        return this.getColor().equals(other.getColor()) &&
-            this.getType().equalsIgnoreCase(other.getType()) &&
-            this.getXPos() == other.getXPos() &&
-            this.getYPos() == other.getYPos();
+        return this.color.equals(other.color)
+            && this.type.equalsIgnoreCase(other.type)
+            && this.xPos == other.xPos
+            && this.yPos == other.yPos;
     }
-
 
     @Override
     public int hashCode() {
-        return Objects.hash(color, type, xPos, yPos, texture, hasMoved);
+        return Objects.hash(color, type, xPos, yPos, hasMoved);
     }
 
-    // When the position changes, mark the piece as having moved.
     public void setPosition(int newX, int newY) {
         if (newX != xPos || newY != yPos) {
             xPos = newX;
@@ -70,27 +63,10 @@ public class ChessPiece {
         }
     }
 
-    public int getXPos() {
-        return xPos;
-    }
-
-    public int getYPos() {
-        return yPos;
-    }
-
-    public String getColor() {
-        return color;
-    }
-
-    public String getType() {
-        return type;
-    }
-
-    public boolean hasMoved() {
-        return hasMoved;
-    }
-
-    public void setHasMoved(boolean moved) {
-        hasMoved = moved;
-    }
+    public int getXPos() { return xPos; }
+    public int getYPos() { return yPos; }
+    public String getColor() { return color; }
+    public String getType() { return type; }
+    public boolean hasMoved() { return hasMoved; }
+    public void setHasMoved(boolean moved) { hasMoved = moved; }
 }
