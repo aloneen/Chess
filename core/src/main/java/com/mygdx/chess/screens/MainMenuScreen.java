@@ -1,3 +1,4 @@
+// MainMenuScreen.java
 package com.mygdx.chess.screens;
 
 import com.badlogic.gdx.Gdx;
@@ -17,72 +18,60 @@ import com.mygdx.chess.ChessGame;
 public class MainMenuScreen implements Screen {
     private final ChessGame game;
     private final Stage stage;
-    private final Skin skin; // We'll use a built-in skin or your custom one
+    private final Skin skin;
 
     public MainMenuScreen(ChessGame game) {
-        this.game = game;
+        this.game  = game;
         this.stage = new Stage(new ScreenViewport());
+        this.skin  = new Skin(Gdx.files.internal("skins/uiskin.json"));
 
-        // You can use a built-in "default" skin if you place uiskin.json/uiskin.atlas in assets/
-        // Or use any custom skin you like. For example:
-        this.skin = new Skin(Gdx.files.internal("skins/uiskin.json"));
-
-        // Create a table to layout widgets
         Table table = new Table();
         table.setFillParent(true);
         stage.addActor(table);
 
-        // Create a label for the title
-        Label titleLabel = new Label("My Chess Game", skin, "default");
-        titleLabel.setFontScale(2f);
-        titleLabel.setAlignment(Align.center);
+        Label title = new Label("My Chess Game", skin, "default");
+        title.setFontScale(2f);
+        title.setAlignment(Align.center);
 
-        // Create a "Start Game" button
-        TextButton startButton = new TextButton("Start Game", skin);
-
-        // Add a click listener to startButton
-        startButton.addListener(new ClickListener() {
+        TextButton whiteBtn = new TextButton("Play as White", skin);
+        whiteBtn.addListener(new ClickListener() {
             @Override
             public void clicked(InputEvent event, float x, float y) {
-                // Move to the GameScreen
-                game.setScreen(new GameScreen(game));
+                // white on bottom
+                game.setScreen(new GameScreen(game, false));
             }
         });
 
-        // Add the widgets to the table
-        table.add(titleLabel).expandX().center().padBottom(50f);
-        table.row();
-        table.add(startButton).center();
+        TextButton blackBtn = new TextButton("Play as Black", skin);
+        blackBtn.addListener(new ClickListener() {
+            @Override
+            public void clicked(InputEvent event, float x, float y) {
+                // black on bottom
+                game.setScreen(new GameScreen(game, true));
+            }
+        });
 
+        table.add(title).expandX().center().padBottom(40f);
+        table.row();
+        table.add(whiteBtn).width(200).pad(10);
+        table.row();
+        table.add(blackBtn).width(200).pad(10);
     }
 
     @Override
     public void show() {
-        // Set input processor to this screen's stage
         Gdx.input.setInputProcessor(stage);
     }
-
-    @Override
-    public void render(float delta) {
-        // Clear the screen
+    @Override public void render(float delta) {
         Gdx.gl.glClearColor(0, 0, 0, 1);
         Gdx.gl.glClear(GL20.GL_COLOR_BUFFER_BIT);
-
-        // Update and draw the stage (Scene2D)
         stage.act(delta);
         stage.draw();
     }
 
-    @Override public void resize(int width, int height) {
-        stage.getViewport().update(width, height, true);
-    }
-    @Override public void pause() { }
+    @Override public void resize(int w, int h) { stage.getViewport().update(w, h, true); }
+    @Override public void pause()  { }
     @Override public void resume() { }
-    @Override public void hide() { }
-
-    @Override
-    public void dispose() {
-        stage.dispose();
-        skin.dispose();
-    }
+    @Override public void hide()   { }
+    @Override public void dispose(){ stage.dispose(); skin.dispose(); }
 }
