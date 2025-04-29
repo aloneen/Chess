@@ -10,8 +10,7 @@ import com.mygdx.chess.actors.ChessPiece;
 import com.mygdx.chess.logic.GameLogic;
 import com.mygdx.chess.logic.Move;
 import com.mygdx.chess.screens.GameOverScreen;
-//import com.mygdx.chess.screens.GameOverScreen;
-
+import com.mygdx.chess.screens.PromotionScreen;
 
 import java.util.Iterator;
 import java.util.List;
@@ -31,13 +30,11 @@ public class ChessInputProcessor implements InputProcessor {
 
     @Override
     public boolean touchDown(int screenX, int screenY, int pointer, int button) {
-        // Convert the screen coordinates into world coordinates.
         Vector3 worldCoordinates = camera.unproject(new Vector3(screenX, screenY, 0));
         int boardX = (int)(worldCoordinates.x / ChessBoard.SQUARE_SIZE);
         int boardY = (int)(worldCoordinates.y / ChessBoard.SQUARE_SIZE);
 
         if (selectedPiece == null) {
-            // No piece selected: try to select one and show its possible moves.
             for (ChessPiece piece : chessBoard.getPieces()) {
                 if (piece.getXPos() == boardX && piece.getYPos() == boardY) {
                     selectedPiece = piece;
@@ -47,10 +44,9 @@ public class ChessInputProcessor implements InputProcessor {
                 }
             }
         } else {
-            // A piece is selected; attempt to move it.
             GameLogic logic = chessBoard.getGameLogic();
             if (logic.isValidMove(selectedPiece, boardX, boardY, chessBoard.getPieces())) {
-                // Handle castling: if the king is moving two squares horizontally, reposition the rook.
+                // Handle castling.
                 if (selectedPiece.getType().equalsIgnoreCase("king") && Math.abs(boardX - selectedPiece.getXPos()) == 2) {
                     int startX = selectedPiece.getXPos();
                     int startY = selectedPiece.getYPos();
@@ -66,7 +62,7 @@ public class ChessInputProcessor implements InputProcessor {
                         }
                     }
                 }
-                // Capture logic: remove any enemy piece at the destination.
+                // Capture logic.
                 Iterator<ChessPiece> iter = chessBoard.getPieces().iterator();
                 while (iter.hasNext()) {
                     ChessPiece piece = iter.next();
@@ -78,9 +74,20 @@ public class ChessInputProcessor implements InputProcessor {
                 }
                 // Move the selected piece.
                 selectedPiece.setPosition(boardX, boardY);
-                logic.toggleTurn();
 
-                // After the move, check for checkmate or stalemate.
+                // Check for pawn promotion.
+                if(selectedPiece.getType().equalsIgnoreCase("pawn") &&
+                    ((selectedPiece.getColor().equalsIgnoreCase("white") && boardY == 7) ||
+                        (selectedPiece.getColor().equalsIgnoreCase("black") && boardY == 0))) {
+                    // Switch to the promotion selection screen.
+                    game.setScreen(new PromotionScreen(game, chessBoard, selectedPiece));
+                    selectedPiece = null;
+                    chessBoard.setPossibleMoves(null);
+                    return true;
+                }
+
+                // No promotion: toggle turn and check for game end.
+                logic.toggleTurn();
                 String currentTurnColor = logic.isWhiteTurn() ? "white" : "black";
                 if (logic.isCheckmate(currentTurnColor, chessBoard.getPieces())) {
                     String winner = currentTurnColor.equals("white") ? "Black" : "White";
@@ -91,7 +98,6 @@ public class ChessInputProcessor implements InputProcessor {
                     return true;
                 }
             }
-            // Clear selection and move indicators.
             selectedPiece = null;
             chessBoard.setPossibleMoves(null);
             return true;
@@ -100,12 +106,7 @@ public class ChessInputProcessor implements InputProcessor {
     }
 
     @Override public boolean touchUp(int screenX, int screenY, int pointer, int button) { return false; }
-
-    @Override
-    public boolean touchCancelled(int i, int i1, int i2, int i3) {
-        return false;
-    }
-
+    @Override public boolean touchCancelled(int i, int i1, int i2, int i3) { return false; }
     @Override public boolean touchDragged(int screenX, int screenY, int pointer) { return false; }
     @Override public boolean mouseMoved(int screenX, int screenY) { return false; }
     @Override public boolean scrolled(float amountX, float amountY) { return false; }
@@ -113,13 +114,12 @@ public class ChessInputProcessor implements InputProcessor {
     @Override public boolean keyUp(int keycode) { return false; }
     @Override public boolean keyTyped(char character) { return false; }
 
-    // Helper: finds a piece at the board coordinates (x,y) with the given color.
     private ChessPiece findPieceAt(int x, int y, String color) {
         for (ChessPiece piece : chessBoard.getPieces()) {
-            if (piece.getXPos() == x && piece.getYPos() == y && piece.getColor().equals(color)) {
+            if (piece.getXPos() == x && piece.getYPos() == y && piece.getColor().equals(color))
                 return piece;
-            }
         }
         return null;
     }
+
 }
