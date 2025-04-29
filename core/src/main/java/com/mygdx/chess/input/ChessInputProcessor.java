@@ -16,9 +16,9 @@ import java.util.Iterator;
 import java.util.List;
 
 public class ChessInputProcessor implements InputProcessor {
-    private ChessGame game;
-    private ChessBoard chessBoard;
-    private OrthographicCamera camera;
+    private final ChessGame game;
+    private final ChessBoard chessBoard;
+    private final OrthographicCamera camera;
     private ChessPiece selectedPiece = null;
 
     public ChessInputProcessor(ChessGame game, ChessBoard board, OrthographicCamera camera) {
@@ -41,7 +41,7 @@ public class ChessInputProcessor implements InputProcessor {
                 if (p.getXPos() == boardX && p.getYPos() == boardY) {
                     selectedPiece = p;
                     List<Move> moves = chessBoard.getGameLogic()
-                        .getPossibleMoves(selectedPiece, chessBoard.getPieces());
+                        .getPossibleMoves(p, chessBoard.getPieces());
                     chessBoard.setPossibleMoves(moves);
                     return true;
                 }
@@ -55,19 +55,17 @@ public class ChessInputProcessor implements InputProcessor {
                 // ---- handle castling ----
                 if (selectedPiece.getType().equalsIgnoreCase("king") &&
                     Math.abs(boardX - originalX) == 2) {
-                    int startY = originalY;
+                    int y = originalY;
                     if (boardX > originalX) {
-                        // kingside
-                        ChessPiece rook = findPieceAt(7, startY, selectedPiece.getColor());
-                        if (rook != null) rook.setPosition(originalX + 1, startY);
+                        ChessPiece rook = findPieceAt(7, y, selectedPiece.getColor());
+                        if (rook != null) rook.setPosition(originalX + 1, y);
                     } else {
-                        // queenside
-                        ChessPiece rook = findPieceAt(0, startY, selectedPiece.getColor());
-                        if (rook != null) rook.setPosition(originalX - 1, startY);
+                        ChessPiece rook = findPieceAt(0, y, selectedPiece.getColor());
+                        if (rook != null) rook.setPosition(originalX - 1, y);
                     }
                 }
 
-                // ---- detect en passant capture ----
+                // ---- detect en passant ----
                 boolean isEnPassant = false;
                 if (selectedPiece.getType().equalsIgnoreCase("pawn") &&
                     Math.abs(boardX - originalX) == 1 &&
@@ -78,7 +76,6 @@ public class ChessInputProcessor implements InputProcessor {
 
                 // ---- perform capture ----
                 if (!isEnPassant) {
-                    // normal capture
                     Iterator<ChessPiece> iter = chessBoard.getPieces().iterator();
                     while (iter.hasNext()) {
                         ChessPiece p = iter.next();
@@ -89,24 +86,23 @@ public class ChessInputProcessor implements InputProcessor {
                         }
                     }
                 } else {
-                    // remove the pawn that moved two squares last turn
-                    int capturedPawnY = selectedPiece.getColor().equalsIgnoreCase("white")
+                    int capY = selectedPiece.getColor().equalsIgnoreCase("white")
                         ? boardY - 1
                         : boardY + 1;
                     Iterator<ChessPiece> iter = chessBoard.getPieces().iterator();
                     while (iter.hasNext()) {
                         ChessPiece p = iter.next();
-                        if (p.getXPos() == boardX && p.getYPos() == capturedPawnY) {
+                        if (p.getXPos() == boardX && p.getYPos() == capY) {
                             iter.remove();
                             break;
                         }
                     }
                 }
 
-                // ---- move the selected piece ----
+                // ---- move the piece ----
                 selectedPiece.setPosition(boardX, boardY);
 
-                // promotion
+                // ---- promotion check ----
                 if (selectedPiece.getType().equalsIgnoreCase("pawn") &&
                     ((selectedPiece.getColor().equalsIgnoreCase("white") && boardY == 7) ||
                         (selectedPiece.getColor().equalsIgnoreCase("black") && boardY == 0))) {
@@ -116,22 +112,34 @@ public class ChessInputProcessor implements InputProcessor {
                     return true;
                 }
 
-                // en passant target, turn toggle, endgame check...
+                // ---- SET OR CLEAR EN PASSANT TARGET (restored!) ----
+                if (selectedPiece.getType().equalsIgnoreCase("pawn") &&
+                    Math.abs(boardY - originalY) == 2) {
+                    int targetY = selectedPiece.getColor().equalsIgnoreCase("white")
+                        ? originalY + 1
+                        : originalY - 1;
+                    logic.setEnPassantTarget(originalX, targetY, selectedPiece);
+                } else {
+                    logic.clearEnPassantTarget();
+                }
+
+                // ---- toggle turn & game‑end check ----
                 logic.toggleTurn();
-                String currentTurn = logic.isWhiteTurn() ? "white" : "black";
-                if (logic.isCheckmate(currentTurn, chessBoard.getPieces())) {
-                    String winner = currentTurn.equals("white") ? "Black" : "White";
+                String nextColor = logic.isWhiteTurn() ? "white" : "black";
+                if (logic.isCheckmate(nextColor, chessBoard.getPieces())) {
+                    String winner = nextColor.equals("white") ? "Black" : "White";
                     game.setScreen(new GameOverScreen(game, "Checkmate! " + winner + " wins."));
-                } else if (logic.isStalemate(currentTurn, chessBoard.getPieces())) {
+                } else if (logic.isStalemate(nextColor, chessBoard.getPieces())) {
                     game.setScreen(new GameOverScreen(game, "Stalemate! The game is a draw."));
                 }
 
+                // cleanup
                 selectedPiece = null;
                 chessBoard.setPossibleMoves(null);
                 return true;
             }
 
-            // invalid move: deselect
+            // invalid: deselect
             selectedPiece = null;
             chessBoard.setPossibleMoves(null);
             return true;
@@ -140,15 +148,20 @@ public class ChessInputProcessor implements InputProcessor {
         return true;
     }
 
+    // other InputProcessor methods...
+    @Override public boolean touchUp(int x, int y, int p, int b) { return false; }
 
-    @Override public boolean touchUp(int screenX, int screenY, int pointer, int button) { return false; }
-    @Override public boolean touchCancelled(int i, int i1, int i2, int i3) { return false; }
-    @Override public boolean touchDragged(int screenX, int screenY, int pointer) { return false; }
-    @Override public boolean mouseMoved(int screenX, int screenY) { return false; }
-    @Override public boolean scrolled(float amountX, float amountY) { return false; }
-    @Override public boolean keyDown(int keycode) { return false; }
-    @Override public boolean keyUp(int keycode) { return false; }
-    @Override public boolean keyTyped(char character) { return false; }
+    @Override
+    public boolean touchCancelled(int i, int i1, int i2, int i3) {
+        return false;
+    }
+
+    @Override public boolean touchDragged(int x, int y, int p)     { return false; }
+    @Override public boolean mouseMoved(int x, int y)             { return false; }
+    @Override public boolean scrolled(float x, float y)           { return false; }
+    @Override public boolean keyDown(int keycode)                 { return false; }
+    @Override public boolean keyUp(int keycode)                   { return false; }
+    @Override public boolean keyTyped(char c)                     { return false; }
 
     private ChessPiece findPieceAt(int x, int y, String color) {
         for (ChessPiece p : chessBoard.getPieces()) {
