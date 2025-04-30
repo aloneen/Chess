@@ -1,3 +1,4 @@
+
 package com.mygdx.chess.screens;
 
 import com.badlogic.gdx.Gdx;
@@ -6,11 +7,14 @@ import com.badlogic.gdx.graphics.GL20;
 import com.badlogic.gdx.graphics.OrthographicCamera;
 import com.badlogic.gdx.graphics.g2d.SpriteBatch;
 import com.mygdx.chess.ChessGame;
-import com.mygdx.chess.actors.ChessBoard;
 import com.mygdx.chess.actors.ChessPiece;
+import com.mygdx.chess.factory.BoardModelFactory;
 import com.mygdx.chess.input.ChessInputProcessor;
 import com.mygdx.chess.logic.GameLogic;
-import com.mygdx.chess.screens.GameOverScreen;
+import com.mygdx.chess.model.BoardModel;
+import com.mygdx.chess.model.IBoardModel;
+import com.mygdx.chess.view.ChessRenderer;
+import com.mygdx.chess.view.IChessRenderer;
 
 import java.io.BufferedReader;
 import java.io.BufferedWriter;
@@ -24,34 +28,43 @@ import java.util.List;
 import static com.mygdx.chess.screens.BotLevelScreen.Difficulty;
 
 public class BotGameScreen implements Screen {
-    private final ChessGame game;
-    private final SpriteBatch batch;
+    private final ChessGame      game;
+    private final SpriteBatch    batch;
     private final OrthographicCamera camera;
-    private final ChessBoard chessBoard;
-    private final GameLogic logic;
-    private final boolean humanIsWhite;
-    private final Difficulty difficulty;
+    private final IBoardModel    model;
+    private final IChessRenderer renderer;
+    private final GameLogic      logic;
+    private final boolean        humanIsWhite;
+    private final Difficulty     difficulty;
 
-    private Process engineProc;
-    private BufferedWriter engineIn;
-    private BufferedReader engineOut;
+    private Process              engineProc;
+    private BufferedWriter       engineIn;
+    private BufferedReader       engineOut;
 
-    private final List<String> moveHistory = new ArrayList<>();
-    private boolean botThinking = false;
+    private final List<String>   moveHistory = new ArrayList<>();
+    private boolean              botThinking = false;
 
     public BotGameScreen(ChessGame game, Difficulty difficulty, boolean humanIsWhite) {
-        this.game = game;
-        this.difficulty = difficulty;
+        this.game         = game;
+        this.difficulty   = difficulty;
         this.humanIsWhite = humanIsWhite;
-        this.batch = new SpriteBatch();
 
+        // libGDX setup
+        this.batch  = new SpriteBatch();
         this.camera = new OrthographicCamera();
         camera.setToOrtho(false, 800, 800);
 
-        this.chessBoard = new ChessBoard(!humanIsWhite);
-        this.logic = chessBoard.getGameLogic();
+        // model, renderer, logic
+        //Factory Method Design Pattern.
+        this.model = BoardModelFactory.createStandardBoard(!humanIsWhite);
+        this.renderer = new ChessRenderer(model);
+        this.logic    = model.getGameLogic();
 
-        Gdx.input.setInputProcessor(new ChessInputProcessor(game, chessBoard, camera));
+        // input
+        Gdx.input.setInputProcessor(new ChessInputProcessor(
+            game, model, camera, renderer
+        ));
+
         startEngine();
     }
 
@@ -64,8 +77,11 @@ public class BotGameScreen implements Screen {
     }
 
     public void recordHumanMove(int fromX, int fromY, int toX, int toY) {
-        String uci = "" + (char)('a' + fromX) + (char)('1' + fromY)
-            + (char)('a' + toX) + (char)('1' + toY);
+        String uci = ""
+            + (char)('a' + fromX)
+            + (char)('1' + fromY)
+            + (char)('a' + toX)
+            + (char)('1' + toY);
         moveHistory.add(uci);
     }
 
@@ -75,16 +91,17 @@ public class BotGameScreen implements Screen {
             engineProc = new ProcessBuilder(enginePath)
                 .redirectErrorStream(true)
                 .start();
-            engineIn = new BufferedWriter(new OutputStreamWriter(engineProc.getOutputStream()));
+            engineIn  = new BufferedWriter(new OutputStreamWriter(engineProc.getOutputStream()));
             engineOut = new BufferedReader(new InputStreamReader(engineProc.getInputStream()));
 
             sendUCI("uci");
             sendUCI("setoption name UCI_LimitStrength value true");
+
             int elo;
             switch (difficulty) {
-                case LOW:    elo = 600;  break;
+                case LOW:    elo =  400; break;
                 case MEDIUM: elo = 1200; break;
-                default:     elo = 1500; break;
+                default:     elo = 1800; break;
             }
             sendUCI("setoption name UCI_Elo value " + elo);
             sendUCI("isready");
@@ -100,106 +117,138 @@ public class BotGameScreen implements Screen {
 
     @Override
     public void render(float delta) {
-        chessBoard.update(delta);
-        Gdx.gl.glClearColor(1f, 1f, 1f, 1f);
+        // draw board
+        Gdx.gl.glClearColor(1f,1f,1f,1f);
         Gdx.gl.glClear(GL20.GL_COLOR_BUFFER_BIT);
 
         camera.update();
         batch.setProjectionMatrix(camera.combined);
         batch.begin();
-        batch.setColor(1f,1f,1f,0.7f);
-        chessBoard.render(batch);
+        renderer.render(batch);
         batch.end();
 
+        // if it's bot's turn, think
         boolean whiteToMove = logic.isWhiteTurn();
         boolean botTurn = (whiteToMove && !humanIsWhite) || (!whiteToMove && humanIsWhite);
         if (botTurn && !botThinking) {
             botThinking = true;
-            new Thread(this::thinkAndMove).start();
+            new Thread(new Runnable() { public void run() { thinkAndMove(); } }).start();
         }
     }
 
     private void thinkAndMove() {
         try {
+            // 1) position
             sendUCI("position startpos moves " + String.join(" ", moveHistory));
 
+            // 2) go
             int ms;
             switch (difficulty) {
                 case LOW:    ms = 1500; break;
-                case MEDIUM: ms = 800;  break;
-                default:     ms = 500;  break;
+                case MEDIUM: ms =  800; break;
+                default:     ms =  500; break;
             }
             sendUCI("go movetime " + ms);
 
-            String bestLine;
-            String best = null;
-            while ((bestLine = engineOut.readLine()) != null) {
-                if (bestLine.startsWith("bestmove")) {
-                    best = bestLine.split(" ")[1];
+            // 3) read bestmove
+            String line, best = null;
+            while ((line = engineOut.readLine()) != null) {
+                if (line.startsWith("bestmove")) {
+                    best = line.split(" ")[1];
                     break;
                 }
             }
 
             if (best != null && best.length() >= 4) {
-                final String uciMove = best;
-                final int fx = uciMove.charAt(0) - 'a';
-                final int fy = uciMove.charAt(1) - '1';
-                final int tx = uciMove.charAt(2) - 'a';
-                final int ty = uciMove.charAt(3) - '1';
-                final boolean isPromo = uciMove.length() == 5;
-                final char promoChar = isPromo ? uciMove.charAt(4) : ' ';
-                final String promoType;
-                switch (promoChar) {
-                    case 'q': promoType = "queen";  break;
-                    case 'r': promoType = "rook";   break;
-                    case 'b': promoType = "bishop"; break;
-                    case 'n': promoType = "knight"; break;
-                    default:  promoType = null;      break;
+                final String uci = best;
+                final int fx = uci.charAt(0) - 'a';
+                final int fy = uci.charAt(1) - '1';
+                final int tx = uci.charAt(2) - 'a';
+                final int ty = uci.charAt(3) - '1';
+                final boolean isPromo = (uci.length() == 5);
+                final char promC = isPromo ? uci.charAt(4) : ' ';
+                final String promType;
+                switch (promC) {
+                    case 'q': promType = "queen";  break;
+                    case 'r': promType = "rook";   break;
+                    case 'b': promType = "bishop"; break;
+                    case 'n': promType = "knight"; break;
+                    default:  promType = null;     break;
                 }
 
-                // small pause to improve UX
+                // small delay
                 Thread.sleep(500);
 
-                Gdx.app.postRunnable(() -> {
-                    // Remove captured piece
-                    Iterator<ChessPiece> it = chessBoard.getPieces().iterator();
-                    while (it.hasNext()) {
-                        ChessPiece q = it.next();
-                        if (q.getXPos() == tx && q.getYPos() == ty && q != findPieceAt(fx, fy)) {
-                            it.remove();
-                            break;
-                        }
-                    }
-                    ChessPiece p = findPieceAt(fx, fy);
-                    if (p != null) {
-                        if (isPromo && promoType != null) {
-                            ChessPiece promoted = new ChessPiece(p.getColor(), promoType, tx, ty);
-                            chessBoard.getPieces().remove(p);
-                            chessBoard.getPieces().add(promoted);
-                            // no en passant on promotion
-                            logic.clearEnPassantTarget();
-                        } else {
-                            // Bot pawn double-step: set en passant
-                            if (p.getType().equalsIgnoreCase("pawn") && Math.abs(ty - fy) == 2) {
-                                int targetY = (fy + ty) / 2;
-                                logic.setEnPassantTarget(tx, targetY, p);
-                            } else {
-                                logic.clearEnPassantTarget();
-                            }
-                            p.setPosition(tx, ty);
-                        }
-                        moveHistory.add(uciMove);
-                        logic.toggleTurn();
+                Gdx.app.postRunnable(new Runnable() {
+                    @Override public void run() {
+                        List<ChessPiece> pieces = model.getPieces();
 
-                        String nextColor = logic.isWhiteTurn() ? "white" : "black";
-                        if (logic.isCheckmate(nextColor, chessBoard.getPieces())) {
-                            String winner = nextColor.equals("white") ? "Black" : "White";
-                            game.setScreen(new GameOverScreen(game, "Checkmate! " + winner + " wins."));
-                        } else if (logic.isStalemate(nextColor, chessBoard.getPieces())) {
-                            game.setScreen(new GameOverScreen(game, "Stalemate! The game is a draw."));
+                        // a) find mover
+                        ChessPiece mover = findPieceAt(fx, fy);
+
+                        // b) castling?
+                        if (mover != null
+                            && mover.getType().equalsIgnoreCase("king")
+                            && Math.abs(tx - fx) == 2)
+                        {
+                            int rookFromX = (tx > fx) ? 7 : 0;
+                            int rookToX   = (tx > fx) ? fx + 1 : fx - 1;
+                            ChessPiece rook = findPieceAt(rookFromX, fy);
+                            if (rook != null && rook.getType().equalsIgnoreCase("rook")) {
+                                rook.setPosition(rookToX, fy);
+                            }
                         }
+
+                        // c) remove capture
+                        Iterator<ChessPiece> it = pieces.iterator();
+                        while (it.hasNext()) {
+                            ChessPiece p = it.next();
+                            if (p.getXPos() == tx && p.getYPos() == ty && p != mover) {
+                                it.remove();
+                                break;
+                            }
+                        }
+
+                        // d) promotion or normal move
+                        if (mover != null) {
+                            if (isPromo && promType != null) {
+                                pieces.remove(mover);
+                                pieces.add(new ChessPiece(
+                                    mover.getColor(), promType, tx, ty));
+                                logic.clearEnPassantTarget();
+                            } else {
+                                // en passant setup
+                                if (mover.getType().equalsIgnoreCase("pawn")
+                                    && Math.abs(ty - fy) == 2)
+                                {
+                                    int midY = (fy + ty) / 2;
+                                    logic.setEnPassantTarget(tx, midY, mover);
+                                } else {
+                                    logic.clearEnPassantTarget();
+                                }
+                                mover.setPosition(tx, ty);
+                            }
+
+                            // e) record
+                            moveHistory.add(uci);
+
+                            // f) switch and endgame
+                            logic.toggleTurn();
+                            String next = logic.isWhiteTurn() ? "white" : "black";
+                            if (logic.isCheckmate(next, pieces)) {
+                                String winner = next.equals("white") ? "Black" : "White";
+                                game.setScreen(new GameOverScreen(
+                                    game, "Checkmate! " + winner + " wins."
+                                ));
+                            } else if (logic.isStalemate(next, pieces)) {
+                                game.setScreen(new GameOverScreen(
+                                    game, "Stalemate! The game is a draw."
+                                ));
+                            }
+                        }
+
+                        botThinking = false;
                     }
-                    botThinking = false;
                 });
             } else {
                 botThinking = false;
@@ -210,21 +259,29 @@ public class BotGameScreen implements Screen {
         }
     }
 
+    /** Finds the piece at board coordinates (x,y). */
     private ChessPiece findPieceAt(int x, int y) {
-        for (ChessPiece p : chessBoard.getPieces()) {
-            if (p.getXPos() == x && p.getYPos() == y) return p;
+        for (ChessPiece p : model.getPieces()) {
+            if (p.getXPos() == x && p.getYPos() == y) {
+                return p;
+            }
         }
         return null;
     }
 
-    @Override public void resize(int width, int height) {}
+    // Screen stubs
+    @Override public void resize(int w, int h) {}
     @Override public void show() {}
     @Override public void hide() {}
     @Override public void pause() {}
     @Override public void resume() {}
     @Override public void dispose() {
         batch.dispose();
-        chessBoard.dispose();
+        renderer.dispose();
         if (engineProc != null) engineProc.destroy();
+    }
+
+    public Difficulty getDifficulty() {
+        return difficulty;
     }
 }
