@@ -157,9 +157,11 @@ public class BotGameScreen implements Screen {
                     default:  promoType = null;      break;
                 }
 
+                // small pause to improve UX
                 Thread.sleep(500);
 
                 Gdx.app.postRunnable(() -> {
+                    // Remove captured piece
                     Iterator<ChessPiece> it = chessBoard.getPieces().iterator();
                     while (it.hasNext()) {
                         ChessPiece q = it.next();
@@ -174,17 +176,26 @@ public class BotGameScreen implements Screen {
                             ChessPiece promoted = new ChessPiece(p.getColor(), promoType, tx, ty);
                             chessBoard.getPieces().remove(p);
                             chessBoard.getPieces().add(promoted);
+                            // no en passant on promotion
+                            logic.clearEnPassantTarget();
                         } else {
+                            // Bot pawn double-step: set en passant
+                            if (p.getType().equalsIgnoreCase("pawn") && Math.abs(ty - fy) == 2) {
+                                int targetY = (fy + ty) / 2;
+                                logic.setEnPassantTarget(tx, targetY, p);
+                            } else {
+                                logic.clearEnPassantTarget();
+                            }
                             p.setPosition(tx, ty);
                         }
                         moveHistory.add(uciMove);
                         logic.toggleTurn();
 
-                        String next = logic.isWhiteTurn() ? "white" : "black";
-                        if (logic.isCheckmate(next, chessBoard.getPieces())) {
-                            String winner = next.equals("white") ? "Black" : "White";
+                        String nextColor = logic.isWhiteTurn() ? "white" : "black";
+                        if (logic.isCheckmate(nextColor, chessBoard.getPieces())) {
+                            String winner = nextColor.equals("white") ? "Black" : "White";
                             game.setScreen(new GameOverScreen(game, "Checkmate! " + winner + " wins."));
-                        } else if (logic.isStalemate(next, chessBoard.getPieces())) {
+                        } else if (logic.isStalemate(nextColor, chessBoard.getPieces())) {
                             game.setScreen(new GameOverScreen(game, "Stalemate! The game is a draw."));
                         }
                     }
@@ -210,7 +221,7 @@ public class BotGameScreen implements Screen {
     @Override public void show() {}
     @Override public void hide() {}
     @Override public void pause() {}
-    @Override public void resume(){}
+    @Override public void resume() {}
     @Override public void dispose() {
         batch.dispose();
         chessBoard.dispose();
