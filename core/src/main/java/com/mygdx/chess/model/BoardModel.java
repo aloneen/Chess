@@ -13,11 +13,12 @@ import java.util.List;
 public class BoardModel implements IBoardModel {
     private final boolean flip;
     private final List<ChessPiece> pieces = new ArrayList<>();
-    private final GameLogic logic = new GameLogic();
+    private final GameLogic logic = GameLogic.getInstance();
     private List<Move> possibleMoves = null;
 
     public BoardModel(boolean flip) {
         this.flip = flip;
+        GameLogic.getInstance().reset();
         initializePieces();
     }
 
