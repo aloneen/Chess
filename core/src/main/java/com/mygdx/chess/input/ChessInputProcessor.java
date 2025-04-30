@@ -1,5 +1,6 @@
 package com.mygdx.chess.input;
 
+import com.badlogic.gdx.Gdx;
 import com.badlogic.gdx.InputProcessor;
 import com.badlogic.gdx.graphics.OrthographicCamera;
 import com.badlogic.gdx.math.Vector3;
@@ -8,6 +9,7 @@ import com.mygdx.chess.actors.ChessBoard;
 import com.mygdx.chess.actors.ChessPiece;
 import com.mygdx.chess.logic.GameLogic;
 import com.mygdx.chess.logic.Move;
+import com.mygdx.chess.screens.BotGameScreen;
 import com.mygdx.chess.screens.GameOverScreen;
 import com.mygdx.chess.screens.PromotionScreen;
 
@@ -21,23 +23,34 @@ public class ChessInputProcessor implements InputProcessor {
     private ChessPiece selectedPiece = null;
 
     public ChessInputProcessor(ChessGame game, ChessBoard board, OrthographicCamera camera) {
-        this.game = game;
+        this.game       = game;
         this.chessBoard = board;
-        this.camera = camera;
+        this.camera     = camera;
     }
 
     @Override
     public boolean touchDown(int screenX, int screenY, int pointer, int button) {
-        // Convert screen click to board coordinates
-        Vector3 world = camera.unproject(new Vector3(screenX, screenY, 0));
-        int rawX = (int) (world.x / ChessBoard.SQUARE_SIZE);
-        int rawY = (int) (world.y / ChessBoard.SQUARE_SIZE);
+        //  If we're in a BotGameScreen, only allow clicks on the human's turn
+        if (game.getScreen() instanceof BotGameScreen) {
+            BotGameScreen bgs = (BotGameScreen) game.getScreen();
+            GameLogic logic = bgs.getGameLogic();
+            boolean whiteToMove = logic.isWhiteTurn();
+            boolean humanTurn = (whiteToMove && bgs.isHumanWhite())
+                || (!whiteToMove && !bgs.isHumanWhite());
+            if (!humanTurn) {
+                return false;
+            }
+        }
 
-        // Flip both axes if playing as black
+        // Convert screen coords to board coords
+        Vector3 world = camera.unproject(new Vector3(screenX, screenY, 0));
+        int rawX = (int)(world.x / ChessBoard.SQUARE_SIZE);
+        int rawY = (int)(world.y / ChessBoard.SQUARE_SIZE);
         boolean flip = chessBoard.isFlipY();
         int boardX = flip ? 7 - rawX : rawX;
         int boardY = flip ? 7 - rawY : rawY;
 
+        // Selection or move
         if (selectedPiece == null) {
             // Select a piece
             for (ChessPiece p : chessBoard.getPieces()) {
@@ -55,7 +68,7 @@ public class ChessInputProcessor implements InputProcessor {
             int originalY = selectedPiece.getYPos();
 
             if (logic.isValidMove(selectedPiece, boardX, boardY, chessBoard.getPieces())) {
-                // ---- Handle castling ----
+                // ---- Castling ----
                 if (selectedPiece.getType().equalsIgnoreCase("king")
                     && Math.abs(boardX - originalX) == 2) {
                     int y = originalY;
@@ -68,7 +81,7 @@ public class ChessInputProcessor implements InputProcessor {
                     }
                 }
 
-                // ---- Detect en passant ----
+                // ---- En Passant detection ----
                 boolean isEnPassant = false;
                 if (selectedPiece.getType().equalsIgnoreCase("pawn")
                     && Math.abs(boardX - originalX) == 1
@@ -77,7 +90,7 @@ public class ChessInputProcessor implements InputProcessor {
                     isEnPassant = true;
                 }
 
-                // ---- Perform capture ----
+                // ---- Capture ----
                 if (!isEnPassant) {
                     Iterator<ChessPiece> iter = chessBoard.getPieces().iterator();
                     while (iter.hasNext()) {
@@ -105,7 +118,13 @@ public class ChessInputProcessor implements InputProcessor {
                 // ---- Move the piece ----
                 selectedPiece.setPosition(boardX, boardY);
 
-                // ---- Promotion check ----
+                // ---- Record human move for the bot ----
+                if (game.getScreen() instanceof BotGameScreen) {
+                    ((BotGameScreen)game.getScreen())
+                        .recordHumanMove(originalX, originalY, boardX, boardY);
+                }
+
+                // ---- Promotion ----
                 if (selectedPiece.getType().equalsIgnoreCase("pawn")
                     && ((selectedPiece.getColor().equalsIgnoreCase("white") && boardY == 7)
                     || (selectedPiece.getColor().equalsIgnoreCase("black") && boardY == 0))) {
@@ -115,7 +134,7 @@ public class ChessInputProcessor implements InputProcessor {
                     return true;
                 }
 
-                // ---- Set or clear en passant target ----
+                // ---- Set/Clear en passant target ----
                 if (selectedPiece.getType().equalsIgnoreCase("pawn")
                     && Math.abs(boardY - originalY) == 2) {
                     int targetY = selectedPiece.getColor().equalsIgnoreCase("white")
@@ -126,13 +145,13 @@ public class ChessInputProcessor implements InputProcessor {
                     logic.clearEnPassantTarget();
                 }
 
-                // ---- Toggle turn & check for endgame ----
+                // ---- Toggle turn & check endgame ----
                 logic.toggleTurn();
-                String nextColor = logic.isWhiteTurn() ? "white" : "black";
-                if (logic.isCheckmate(nextColor, chessBoard.getPieces())) {
-                    String winner = nextColor.equals("white") ? "Black" : "White";
+                String next = logic.isWhiteTurn() ? "white" : "black";
+                if (logic.isCheckmate(next, chessBoard.getPieces())) {
+                    String winner = next.equals("white") ? "Black" : "White";
                     game.setScreen(new GameOverScreen(game, "Checkmate! " + winner + " wins."));
-                } else if (logic.isStalemate(nextColor, chessBoard.getPieces())) {
+                } else if (logic.isStalemate(next, chessBoard.getPieces())) {
                     game.setScreen(new GameOverScreen(game, "Stalemate! The game is a draw."));
                 }
 
@@ -158,12 +177,12 @@ public class ChessInputProcessor implements InputProcessor {
         return false;
     }
 
-    @Override public boolean touchDragged(int screenX, int screenY, int pointer)         { return false; }
-    @Override public boolean mouseMoved(int screenX, int screenY)                        { return false; }
-    @Override public boolean scrolled(float amountX, float amountY)                      { return false; }
-    @Override public boolean keyDown(int keycode)                                        { return false; }
-    @Override public boolean keyUp(int keycode)                                          { return false; }
-    @Override public boolean keyTyped(char character)                                    { return false; }
+    @Override public boolean touchDragged(int screenX, int screenY, int pointer)        { return false; }
+    @Override public boolean mouseMoved(int screenX, int screenY)                       { return false; }
+    @Override public boolean scrolled(float amountX, float amountY)                    { return false; }
+    @Override public boolean keyDown(int keycode)                                      { return false; }
+    @Override public boolean keyUp(int keycode)                                        { return false; }
+    @Override public boolean keyTyped(char character)                                  { return false; }
 
     private ChessPiece findPieceAt(int x, int y, String color) {
         for (ChessPiece p : chessBoard.getPieces()) {
