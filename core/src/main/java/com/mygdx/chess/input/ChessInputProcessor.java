@@ -1,195 +1,220 @@
 package com.mygdx.chess.input;
 
-import com.badlogic.gdx.Gdx;
+import com.badlogic.gdx.Input;
 import com.badlogic.gdx.InputProcessor;
 import com.badlogic.gdx.graphics.OrthographicCamera;
 import com.badlogic.gdx.math.Vector3;
 import com.mygdx.chess.ChessGame;
-import com.mygdx.chess.actors.ChessBoard;
 import com.mygdx.chess.actors.ChessPiece;
+
 import com.mygdx.chess.logic.GameLogic;
 import com.mygdx.chess.logic.Move;
+import com.mygdx.chess.memento.GameMemento;
+import com.mygdx.chess.model.IBoardModel;
 import com.mygdx.chess.screens.BotGameScreen;
-import com.mygdx.chess.screens.GameOverScreen;
 import com.mygdx.chess.screens.PromotionScreen;
+import com.mygdx.chess.screens.GameOverScreen;
+import com.mygdx.chess.view.IChessRenderer;
 
 import java.util.Iterator;
 import java.util.List;
+import java.util.Stack;
 
-public class ChessInputProcessor implements InputProcessor {
-    private final ChessGame game;
-    private final ChessBoard chessBoard;
+import static com.mygdx.chess.util.BoardConfig.SQUARE_SIZE;
+
+/**
+ * Processes touch input for selecting and moving pieces,
+ * including en passant, castling, and bot‐turn restrictions.
+ */
+public class ChessInputProcessor implements InputProcessor, IGameInputProcessor {
+    private final ChessGame         game;
+    private final IBoardModel        boardModel;
     private final OrthographicCamera camera;
-    private ChessPiece selectedPiece = null;
+    private final IChessRenderer     renderer;
+    private ChessPiece               selected;
 
-    public ChessInputProcessor(ChessGame game, ChessBoard board, OrthographicCamera camera) {
+    private final Stack<GameMemento> mementoStack = new Stack<>();
+
+    public ChessInputProcessor(
+        ChessGame game,
+        IBoardModel model,
+        OrthographicCamera camera,
+        IChessRenderer renderer
+    ) {
         this.game       = game;
-        this.chessBoard = board;
+        this.boardModel = model;
         this.camera     = camera;
+        this.renderer   = renderer;
+        this.selected   = null;
     }
 
     @Override
     public boolean touchDown(int screenX, int screenY, int pointer, int button) {
-        //  If we're in a BotGameScreen, only allow clicks on the human's turn
+        GameLogic logic = boardModel.getGameLogic();
+        List<ChessPiece> pieces = boardModel.getPieces();
+        mementoStack.push(boardModel.createMemento());
+
+
+        // 1) Bot‐mode: ignore taps when it's the engine’s turn
         if (game.getScreen() instanceof BotGameScreen) {
-            BotGameScreen bgs = (BotGameScreen) game.getScreen();
-            GameLogic logic = bgs.getGameLogic();
+            BotGameScreen bgs = (BotGameScreen)game.getScreen();
             boolean whiteToMove = logic.isWhiteTurn();
-            boolean humanTurn = (whiteToMove && bgs.isHumanWhite())
+            boolean humanTurn   = (whiteToMove && bgs.isHumanWhite())
                 || (!whiteToMove && !bgs.isHumanWhite());
-            if (!humanTurn) {
-                return false;
-            }
+            if (!humanTurn) return false;
         }
 
-        // Convert screen coords to board coords
+        // 2) Convert to board coords
         Vector3 world = camera.unproject(new Vector3(screenX, screenY, 0));
-        int rawX = (int)(world.x / ChessBoard.SQUARE_SIZE);
-        int rawY = (int)(world.y / ChessBoard.SQUARE_SIZE);
-        boolean flip = chessBoard.isFlipY();
+        int rawX = (int)(world.x / SQUARE_SIZE);
+        int rawY = (int)(world.y / SQUARE_SIZE);
+        boolean flip = boardModel.isFlipped();
         int boardX = flip ? 7 - rawX : rawX;
         int boardY = flip ? 7 - rawY : rawY;
 
-        // Selection or move
-        if (selectedPiece == null) {
-            // Select a piece
-            for (ChessPiece p : chessBoard.getPieces()) {
+        // 3) Select piece
+        if (selected == null) {
+            for (ChessPiece p : pieces) {
                 if (p.getXPos() == boardX && p.getYPos() == boardY) {
-                    selectedPiece = p;
-                    List<Move> moves = chessBoard.getGameLogic()
-                        .getPossibleMoves(p, chessBoard.getPieces());
-                    chessBoard.setPossibleMoves(moves);
+                    selected = p;
+                    boardModel.setPossibleMoves(logic.getPossibleMoves(p, pieces));
                     return true;
                 }
             }
-        } else {
-            GameLogic logic = chessBoard.getGameLogic();
-            int originalX = selectedPiece.getXPos();
-            int originalY = selectedPiece.getYPos();
+            return false;
+        }
 
-            if (logic.isValidMove(selectedPiece, boardX, boardY, chessBoard.getPieces())) {
-                // ---- Castling ----
-                if (selectedPiece.getType().equalsIgnoreCase("king")
-                    && Math.abs(boardX - originalX) == 2) {
-                    int y = originalY;
-                    if (boardX > originalX) {
-                        ChessPiece rook = findPieceAt(7, y, selectedPiece.getColor());
-                        if (rook != null) rook.setPosition(originalX + 1, y);
-                    } else {
-                        ChessPiece rook = findPieceAt(0, y, selectedPiece.getColor());
-                        if (rook != null) rook.setPosition(originalX - 1, y);
+        // 4) Attempt move
+        int startX = selected.getXPos();
+        int startY = selected.getYPos();
+
+        boolean isEnPassant = selected.getType().equalsIgnoreCase("pawn")
+            && Math.abs(boardX - startX) == 1
+            && boardY == logic.getEnPassantTargetY()
+            && boardX == logic.getEnPassantTargetX();
+
+        if (logic.isValidMove(selected, boardX, boardY, pieces)) {
+            // ---- CASTLING ----
+            if (selected.getType().equalsIgnoreCase("king")
+                && Math.abs(boardX - startX) == 2) {
+                int rookStartX = (boardX > startX) ? 7 : 0;
+                int rookDestX  = (boardX > startX) ? boardX - 1 : boardX + 1;
+                for (ChessPiece p : pieces) {
+                    if (p.getType().equalsIgnoreCase("rook")
+                        && p.getXPos() == rookStartX
+                        && p.getYPos() == startY
+                        && p.getColor().equals(selected.getColor())) {
+                        p.setPosition(rookDestX, startY);
+                        break;
                     }
                 }
+            }
 
-                // ---- En Passant detection ----
-                boolean isEnPassant = false;
-                if (selectedPiece.getType().equalsIgnoreCase("pawn")
-                    && Math.abs(boardX - originalX) == 1
-                    && boardY == logic.getEnPassantTargetY()
-                    && boardX == logic.getEnPassantTargetX()) {
-                    isEnPassant = true;
-                }
+            // ---- CAPTURE / EN PASSANT ----
+            if (isEnPassant) {
+                int capY = selected.getColor().equalsIgnoreCase("white")
+                    ? boardY - 1 : boardY + 1;
+                pieces.removeIf(p -> p.getXPos() == boardX && p.getYPos() == capY);
+            } else {
+                pieces.removeIf(p ->
+                    p != selected
+                        && p.getXPos() == boardX
+                        && p.getYPos() == boardY
+                );
+            }
 
-                // ---- Capture ----
-                if (!isEnPassant) {
-                    Iterator<ChessPiece> iter = chessBoard.getPieces().iterator();
-                    while (iter.hasNext()) {
-                        ChessPiece p = iter.next();
-                        if (p.getXPos() == boardX && p.getYPos() == boardY
-                            && !p.getColor().equals(selectedPiece.getColor())) {
-                            iter.remove();
-                            break;
-                        }
-                    }
-                } else {
-                    int capY = selectedPiece.getColor().equalsIgnoreCase("white")
-                        ? boardY - 1
-                        : boardY + 1;
-                    Iterator<ChessPiece> iter = chessBoard.getPieces().iterator();
-                    while (iter.hasNext()) {
-                        ChessPiece p = iter.next();
-                        if (p.getXPos() == boardX && p.getYPos() == capY) {
-                            iter.remove();
-                            break;
-                        }
-                    }
-                }
+            // ---- MOVE PIECE ----
+            selected.setPosition(boardX, boardY);
 
-                // ---- Move the piece ----
-                selectedPiece.setPosition(boardX, boardY);
 
-                // ---- Record human move for the bot ----
-                if (game.getScreen() instanceof BotGameScreen) {
-                    ((BotGameScreen)game.getScreen())
-                        .recordHumanMove(originalX, originalY, boardX, boardY);
-                }
 
-                // ---- Promotion ----
-                if (selectedPiece.getType().equalsIgnoreCase("pawn")
-                    && ((selectedPiece.getColor().equalsIgnoreCase("white") && boardY == 7)
-                    || (selectedPiece.getColor().equalsIgnoreCase("black") && boardY == 0))) {
-                    game.setScreen(new PromotionScreen(game, chessBoard, selectedPiece));
-                    selectedPiece = null;
-                    chessBoard.setPossibleMoves(null);
-                    return true;
-                }
 
-                // ---- Set/Clear en passant target ----
-                if (selectedPiece.getType().equalsIgnoreCase("pawn")
-                    && Math.abs(boardY - originalY) == 2) {
-                    int targetY = selectedPiece.getColor().equalsIgnoreCase("white")
-                        ? originalY + 1
-                        : originalY - 1;
-                    logic.setEnPassantTarget(originalX, targetY, selectedPiece);
-                } else {
-                    logic.clearEnPassantTarget();
-                }
 
-                // ---- Toggle turn & check endgame ----
-                logic.toggleTurn();
-                String next = logic.isWhiteTurn() ? "white" : "black";
-                if (logic.isCheckmate(next, chessBoard.getPieces())) {
-                    String winner = next.equals("white") ? "Black" : "White";
-                    game.setScreen(new GameOverScreen(game, "Checkmate! " + winner + " wins."));
-                } else if (logic.isStalemate(next, chessBoard.getPieces())) {
-                    game.setScreen(new GameOverScreen(game, "Stalemate! The game is a draw."));
-                }
 
-                // ---- Cleanup ----
-                selectedPiece = null;
-                chessBoard.setPossibleMoves(null);
+
+            // ---- SET/CLEAR EN PASSANT TARGET ----
+            if (selected.getType().equalsIgnoreCase("pawn")
+                && Math.abs(boardY - startY) == 2) {
+                int targetY = selected.getColor().equalsIgnoreCase("white")
+                    ? startY + 1 : startY - 1;
+                logic.setEnPassantTarget(startX, targetY, selected);
+            } else {
+                logic.clearEnPassantTarget();
+            }
+
+            // ---- PROMOTION ----
+            if (selected.getType().equalsIgnoreCase("pawn")
+                && ((selected.getColor().equalsIgnoreCase("white") && boardY == 7)
+                || (selected.getColor().equalsIgnoreCase("black") && boardY == 0))) {
+                ChessPiece pawn = selected;
+                selected = null;
+                boardModel.setPossibleMoves(null);
+                game.setScreen(new PromotionScreen(
+                    game, boardModel, renderer, pawn
+                ));
                 return true;
             }
 
-            // Invalid move: deselect
-            selectedPiece = null;
-            chessBoard.setPossibleMoves(null);
+            // ---- RECORD HUMAN MOVE FOR BOT ----
+            if (game.getScreen() instanceof BotGameScreen) {
+                ((BotGameScreen)game.getScreen())
+                    .recordHumanMove(startX, startY, boardX, boardY);
+            }
+
+            // ---- TOGGLE TURN & ENDGAME ----
+            logic.toggleTurn();
+            String next = logic.isWhiteTurn() ? "white" : "black";
+            if (logic.isCheckmate(next, pieces)) {
+                String winner = next.equals("white") ? "Black" : "White";
+                game.setScreen(new GameOverScreen(
+                    game, "Checkmate! " + winner + " wins."
+                ));
+            } else if (logic.isStalemate(next, pieces)) {
+                game.setScreen(new GameOverScreen(
+                    game, "Stalemate! The game is a draw."
+                ));
+            }
+
+            // ---- CLEANUP ----
+            selected = null;
+            boardModel.setPossibleMoves(null);
             return true;
         }
 
+        // ---- INVALID MOVE: DESELECT ----
+        selected = null;
+        boardModel.setPossibleMoves(null);
         return true;
     }
 
-    @Override public boolean touchUp(int screenX, int screenY, int pointer, int button) { return false; }
+
+
+
+
+    // Other InputProcessor stubs — no changes
+    @Override
+    public boolean keyDown(int keycode) {
+        if (!(game.getScreen() instanceof BotGameScreen) && keycode == Input.Keys.R) {
+            if (!mementoStack.isEmpty()) {
+                GameMemento last = mementoStack.pop();
+                boardModel.restoreMemento(last);
+                boardModel.setPossibleMoves(null);
+            }
+            return true;
+        }
+        return false;
+    }
+
+    @Override public boolean keyUp(int keycode)                     { return false; }
+    @Override public boolean keyTyped(char character)               { return false; }
+    @Override public boolean touchUp(int x, int y, int p, int b)    { return false; }
 
     @Override
     public boolean touchCancelled(int i, int i1, int i2, int i3) {
         return false;
     }
 
-    @Override public boolean touchDragged(int screenX, int screenY, int pointer)        { return false; }
-    @Override public boolean mouseMoved(int screenX, int screenY)                       { return false; }
-    @Override public boolean scrolled(float amountX, float amountY)                    { return false; }
-    @Override public boolean keyDown(int keycode)                                      { return false; }
-    @Override public boolean keyUp(int keycode)                                        { return false; }
-    @Override public boolean keyTyped(char character)                                  { return false; }
-
-    private ChessPiece findPieceAt(int x, int y, String color) {
-        for (ChessPiece p : chessBoard.getPieces()) {
-            if (p.getXPos() == x && p.getYPos() == y && p.getColor().equals(color)) {
-                return p;
-            }
-        }
-        return null;
-    }
+    @Override public boolean touchDragged(int x, int y, int p)      { return false; }
+    @Override public boolean mouseMoved(int x, int y)               { return false; }
+    @Override public boolean scrolled(float ax, float ay)           { return false; }
 }
