@@ -1,4 +1,3 @@
-
 package com.mygdx.chess.screens;
 
 import com.badlogic.gdx.Gdx;
@@ -26,12 +25,11 @@ public class GameOverScreen implements Screen {
         this.stage = new Stage(new ScreenViewport());
         this.skin  = new Skin(Gdx.files.internal("skins/uiskin.json"));
 
-        // background
-        Image bg = new Image(new com.badlogic.gdx.graphics.Texture(Gdx.files.internal("images/main_bg.jpg")));
+        Image bg = new Image(new com.badlogic.gdx.graphics.Texture(
+            Gdx.files.internal("images/main_bg.jpg")));
         bg.setFillParent(true);
         stage.addActor(bg);
 
-        // UI
         Table table = new Table();
         table.setFillParent(true);
         stage.addActor(table);
@@ -61,26 +59,30 @@ public class GameOverScreen implements Screen {
             }
         });
 
+        TextButton mainMenu = new TextButton("Main Menu", skin);
+        mainMenu.addListener(new ClickListener() {
+            @Override public void clicked(InputEvent e, float x, float y) {
+                game.setScreen(new MainMenuScreen(game));
+            }
+        });
+
         table.add(msg).padBottom(30f).row();
         table.add(playWhite).width(180).pad(5).row();
         table.add(playBlack).width(180).pad(5).row();
-        table.add(quit).width(180).pad(5);
+        table.add(quit).width(180).pad(5).row();
+        table.add(mainMenu).width(180).pad(5);
     }
 
-    @Override public void show() {
-        Gdx.input.setInputProcessor(stage);
-    }
-
-    @Override public void render(float delta) {
-        Gdx.gl.glClearColor(0,0,0,1);
+    @Override public void show()                     { Gdx.input.setInputProcessor(stage); }
+    @Override public void render(float delta)         {
+        Gdx.gl.glClearColor(0, 0, 0, 1);
         Gdx.gl.glClear(GL20.GL_COLOR_BUFFER_BIT);
         stage.act(delta);
         stage.draw();
     }
-
-    @Override public void resize(int w,int h)    { stage.getViewport().update(w,h,true); }
-    @Override public void pause()                { }
-    @Override public void resume()               { }
-    @Override public void hide()                 { }
-    @Override public void dispose()              { stage.dispose(); skin.dispose(); }
+    @Override public void resize(int w, int h)        { stage.getViewport().update(w, h, true); }
+    @Override public void pause()                     { }
+    @Override public void resume()                    { }
+    @Override public void hide()                      { }
+    @Override public void dispose()                   { stage.dispose(); skin.dispose(); }
 }
