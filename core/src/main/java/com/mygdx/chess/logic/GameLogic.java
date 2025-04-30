@@ -1,13 +1,18 @@
 package com.mygdx.chess.logic;
 
 import com.mygdx.chess.actors.ChessPiece;
-import java.util.ArrayList;
-import java.util.Iterator;
-import java.util.List;
+
+import java.util.*;
 
 public class GameLogic {
 
     private static GameLogic instance;
+
+
+
+
+    private final Map<String, IMoveValidator> validatorMap = new HashMap<>();
+
 
     private ChessPiece[][] board;
     private boolean whiteTurn;
@@ -33,7 +38,15 @@ public class GameLogic {
     public GameLogic() {
         board = new ChessPiece[8][8];
         whiteTurn = true;
+
+        validatorMap.put("pawn", new PawnMoveValidator());
+        validatorMap.put("rook", new RookMoveValidator());
+        validatorMap.put("knight", new KnightMoveValidator());
+        validatorMap.put("bishop", new BishopMoveValidator());
+        validatorMap.put("queen", new QueenMoveValidator());
+        validatorMap.put("king", new KingMoveValidator());
     }
+
 
     public void setEnPassantTarget(int x, int y, ChessPiece pawn) {
         enPassantTargetX = x;
@@ -90,85 +103,16 @@ public class GameLogic {
 
     private boolean pieceSpecificValidation(ChessPiece piece, int x, int y,
                                             List<ChessPiece> pieces, boolean ignoreTurn) {
+        updateBoardState(pieces); // ensure board[][] is up-to-date
         String type = piece.getType().toLowerCase();
-        switch (type) {
-            case "pawn":   return isValidPawnMove(piece, x, y);
-            case "rook":   return isValidRookMove(piece, x, y);
-            case "knight": return isValidKnightMove(piece, x, y);
-            case "bishop": return isValidBishopMove(piece, x, y);
-            case "queen":  return isValidQueenMove(piece, x, y);
-            case "king":   return isValidKingMove(piece, x, y, pieces, ignoreTurn);
-            default:       return false;
-        }
+
+        IMoveValidator validator = validatorMap.get(type);
+        if (validator == null) return false;
+
+        return validator.isValid(piece, x, y, pieces, board, this);
     }
 
-    // Pawn including double‑step & en passant
-    private boolean isValidPawnMove(ChessPiece p, int x, int y) {
-        int sx = p.getXPos(), sy = p.getYPos();
-        int dir = p.getColor().equals("white") ? 1 : -1;
-        // One forward
-        if (x==sx && y-sy==dir && board[x][y]==null) return true;
-        // Two forward from start
-        if (x==sx && y-sy==2*dir && !p.hasMoved()
-            && board[sx][sy+dir]==null && board[x][y]==null) return true;
-        // Capture or en passant
-        if (Math.abs(x-sx)==1 && y-sy==dir) {
-            if (board[x][y]!=null && !board[x][y].getColor().equals(p.getColor()))
-                return true;
-            if (board[x][y]==null && x==enPassantTargetX && y==enPassantTargetY)
-                return true;
-        }
-        return false;
-    }
 
-    private boolean isValidRookMove(ChessPiece p, int x, int y) {
-        return (p.getXPos()==x || p.getYPos()==y)
-            && isPathClear(p.getXPos(), p.getYPos(), x, y);
-    }
-
-    private boolean isValidKnightMove(ChessPiece p, int x, int y) {
-        int dx = Math.abs(x - p.getXPos()), dy = Math.abs(y - p.getYPos());
-        return dx*dy==2;
-    }
-
-    private boolean isValidBishopMove(ChessPiece p, int x, int y) {
-        return Math.abs(x-p.getXPos())==Math.abs(y-p.getYPos())
-            && isPathClear(p.getXPos(), p.getYPos(), x, y);
-    }
-
-    private boolean isValidQueenMove(ChessPiece p, int x, int y) {
-        return isValidRookMove(p, x, y) || isValidBishopMove(p, x, y);
-    }
-
-    /**
-     * King move includes one‑square and castling.
-     */
-    private boolean isValidKingMove(ChessPiece p, int x, int y,
-                                    List<ChessPiece> pieces, boolean ignoreTurn) {
-        int sx = p.getXPos(), sy = p.getYPos();
-        int dx = Math.abs(x - sx), dy = Math.abs(y - sy);
-        // Normal one‑square
-        if (dx<=1 && dy<=1) return true;
-
-        // Castling: two squares horizontally, never vertically
-        if (!p.hasMoved() && dy==0 && dx==2) {
-            // Determine rook side
-            int rookX = (x > sx) ? 7 : 0;
-            ChessPiece rook = findPieceAt(rookX, sy, p.getColor(), pieces);
-            if (rook==null || !rook.getType().equalsIgnoreCase("rook") || rook.hasMoved())
-                return false;
-            // Path between king and rook clear?
-            int step = (x > sx) ? 1 : -1;
-            for (int cx = sx+step; cx!=rookX; cx+=step)
-                if (board[cx][sy]!=null) return false;
-            // Squares king passes through not under attack
-            if (isSquareAttacked(sx, sy, p.getColor(), pieces)) return false;
-            if (isSquareAttacked(sx+step, sy, p.getColor(), pieces)) return false;
-            if (isSquareAttacked(sx+2*step, sy, p.getColor(), pieces)) return false;
-            return true;
-        }
-        return false;
-    }
 
     /**
      * Simulate the move, drop any captured piece, and check king safety.
