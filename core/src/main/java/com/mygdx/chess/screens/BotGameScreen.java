@@ -99,9 +99,9 @@ public class BotGameScreen implements Screen {
 
             int elo;
             switch (difficulty) {
-                case LOW:    elo =  400; break;
-                case MEDIUM: elo = 1200; break;
-                default:     elo = 1800; break;
+                case LOW:    elo =  300; break;
+                case MEDIUM: elo = 400; break;
+                default:     elo = 1000; break;
             }
             sendUCI("setoption name UCI_Elo value " + elo);
             sendUCI("isready");
