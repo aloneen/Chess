@@ -9,9 +9,7 @@ public class GameLogic {
     private ChessPiece[][] board;
     private boolean whiteTurn;
 
-    // --- New en passant fields ---
-    // These fields record the target square (the square "jumped over")
-    // and the pawn that just moved two squares (and is vulnerable to en passant).
+    // --- En passant fields ---
     private int enPassantTargetX = -1;
     private int enPassantTargetY = -1;
     private ChessPiece enPassantVulnerablePawn = null;
@@ -94,9 +92,6 @@ public class GameLogic {
         return true;
     }
 
-    /**
-     * Checks movement rules for each piece type.
-     */
     private boolean pieceSpecificValidation(ChessPiece piece, int destX, int destY, List<ChessPiece> pieces, boolean ignoreTurn) {
         String type = piece.getType().toLowerCase();
         switch (type) {
@@ -134,10 +129,8 @@ public class GameLogic {
                 return true;
             // Check for en passant capture.
             if (board[destX][destY] == null && destX == enPassantTargetX && destY == enPassantTargetY) {
-                // For white capturing en passant, pawn must be on row enPassantTargetY - 1.
                 if (color.equalsIgnoreCase("white") && startY == enPassantTargetY - 1)
                     return true;
-                // For black capturing en passant, pawn must be on row enPassantTargetY + 1.
                 if (color.equalsIgnoreCase("black") && startY == enPassantTargetY + 1)
                     return true;
             }
@@ -182,13 +175,13 @@ public class GameLogic {
 
         // Normal one-square moves.
         if (dx <= 1 && dy <= 1)
-            return true; // King safety simulation later will prevent moving next to enemy king.
+            return true;
 
         // Castling: King must move exactly two squares horizontally.
         if (dx == 2 && dy == 0) {
             if (piece.hasMoved())
                 return false;
-            if (destX > startX) { // Kingside castling.
+            if (destX > startX) {
                 ChessPiece rook = findPieceAt(7, startY, piece.getColor(), pieces);
                 if (rook == null || !rook.getType().equalsIgnoreCase("rook") || rook.hasMoved())
                     return false;
@@ -199,7 +192,7 @@ public class GameLogic {
                     isSquareAttacked(startX + 2, startY, piece.getColor(), pieces))
                     return false;
                 return true;
-            } else { // Queenside castling.
+            } else {
                 ChessPiece rook = findPieceAt(0, startY, piece.getColor(), pieces);
                 if (rook == null || !rook.getType().equalsIgnoreCase("rook") || rook.hasMoved())
                     return false;
@@ -215,14 +208,9 @@ public class GameLogic {
         return false;
     }
 
-    /**
-     * Simulation method: returns true if moving the piece to (destX, destY)
-     * would leave its own king in check.
-     */
     private boolean wouldKingBeInCheckAfterMove(ChessPiece movingPiece, int destX, int destY, List<ChessPiece> pieces) {
         List<ChessPiece> simPieces = deepCopyPieces(pieces);
 
-        // Locate the copy of the moving piece in simPieces.
         ChessPiece simMoving = null;
         for (ChessPiece cp : simPieces) {
             if (cp.equals(movingPiece)) {
@@ -233,7 +221,6 @@ public class GameLogic {
         if (simMoving == null)
             return false;
 
-        // Remove any piece (other than simMoving) occupying (destX, destY).
         for (int i = 0; i < simPieces.size(); i++) {
             ChessPiece cp = simPieces.get(i);
             if (!cp.equals(simMoving) && cp.getXPos() == destX && cp.getYPos() == destY) {
@@ -241,11 +228,8 @@ public class GameLogic {
                 break;
             }
         }
-
-        // Simulate the move.
         simMoving.setPosition(destX, destY);
 
-        // Find the king of the moving piece’s color in simPieces.
         ChessPiece king = null;
         for (ChessPiece cp : simPieces) {
             if (cp.getColor().equals(simMoving.getColor()) && cp.getType().equalsIgnoreCase("king")) {
@@ -256,11 +240,9 @@ public class GameLogic {
         if (king == null)
             return false;
 
-        // Use updated attack detection.
         return isSquareAttacked(king.getXPos(), king.getYPos(), king.getColor(), simPieces);
     }
 
-    // ---------- Helper: Create a deep copy of pieces ----------
     private List<ChessPiece> deepCopyPieces(List<ChessPiece> pieces) {
         List<ChessPiece> copy = new ArrayList<>();
         for (ChessPiece piece : pieces) {
@@ -269,7 +251,6 @@ public class GameLogic {
         return copy;
     }
 
-    // ---------- Helper: Find a piece at (x,y) with matching color from a list ----------
     private ChessPiece findPieceAt(int x, int y, String color, List<ChessPiece> pieces) {
         for (ChessPiece p : pieces) {
             if (p.getXPos() == x && p.getYPos() == y && p.getColor().equals(color)) {
@@ -279,9 +260,16 @@ public class GameLogic {
         return null;
     }
 
-    /**
-     * Helper method for attack detection.
-     */
+    public boolean isSquareAttacked(int x, int y, String defendingColor, List<ChessPiece> pieces) {
+        for (ChessPiece p : pieces) {
+            if (!p.getColor().equals(defendingColor)) {
+                if (canPieceAttackSquare(p, x, y, pieces))
+                    return true;
+            }
+        }
+        return false;
+    }
+
     private boolean canPieceAttackSquare(ChessPiece piece, int destX, int destY, List<ChessPiece> pieces) {
         updateBoardState(pieces);
         int startX = piece.getXPos();
@@ -305,8 +293,7 @@ public class GameLogic {
                     return isPathClear(startX, startY, destX, destY);
                 return false;
             case "queen":
-                if ((startX == destX || startY == destY) ||
-                    (Math.abs(destX - startX) == Math.abs(destY - startY)))
+                if ((startX == destX || startY == destY) || (Math.abs(destX - startX) == Math.abs(destY - startY)))
                     return isPathClear(startX, startY, destX, destY);
                 return false;
             case "king":
@@ -316,20 +303,6 @@ public class GameLogic {
         }
     }
 
-    /**
-     * Determines whether a square is attacked by any enemy piece.
-     */
-    public boolean isSquareAttacked(int x, int y, String defendingColor, List<ChessPiece> pieces) {
-        for (ChessPiece p : pieces) {
-            if (!p.getColor().equals(defendingColor)) {
-                if (canPieceAttackSquare(p, x, y, pieces))
-                    return true;
-            }
-        }
-        return false;
-    }
-
-    // ---------- King safety checks ----------
     public boolean isKingInCheck(String color, List<ChessPiece> pieces) {
         ChessPiece king = null;
         for (ChessPiece p : pieces) {
@@ -343,7 +316,6 @@ public class GameLogic {
         return isSquareAttacked(king.getXPos(), king.getYPos(), color, pieces);
     }
 
-    // ---------- Path Clearance ----------
     private boolean isPathClear(int startX, int startY, int destX, int destY) {
         int dx = Integer.compare(destX, startX);
         int dy = Integer.compare(destY, startY);
@@ -357,19 +329,14 @@ public class GameLogic {
         return true;
     }
 
-    // ---------- Turn Management ----------
     public void toggleTurn() {
         whiteTurn = !whiteTurn;
-        // En passant is valid only on the move immediately following a double pawn move.
-        // Clear the en passant target at turn end.
-//        clearEnPassantTarget();
     }
 
     public boolean isWhiteTurn() {
         return whiteTurn;
     }
 
-    // ---------- Generating Possible Moves ----------
     public List<Move> getPossibleMoves(ChessPiece piece, List<ChessPiece> pieces) {
         List<Move> moves = new ArrayList<>();
         for (int x = 0; x < 8; x++) {
@@ -381,30 +348,20 @@ public class GameLogic {
         return moves;
     }
 
-    /**
-     * Checks if any legal move exists for any piece of the given color.
-     */
     public boolean hasLegalMoves(String color, List<ChessPiece> pieces) {
         for (ChessPiece piece : pieces) {
             if (piece.getColor().equals(color)) {
-                List<Move> moves = getPossibleMoves(piece, pieces);
-                if (!moves.isEmpty())
-                    return true;
+                List<Move> m = getPossibleMoves(piece, pieces);
+                if (!m.isEmpty()) return true;
             }
         }
         return false;
     }
 
-    /**
-     * Checkmate: the king is in check and no legal move exists.
-     */
     public boolean isCheckmate(String color, List<ChessPiece> pieces) {
         return isKingInCheck(color, pieces) && !hasLegalMoves(color, pieces);
     }
 
-    /**
-     * Stalemate: the king is not in check but no legal move exists.
-     */
     public boolean isStalemate(String color, List<ChessPiece> pieces) {
         return !isKingInCheck(color, pieces) && !hasLegalMoves(color, pieces);
     }
