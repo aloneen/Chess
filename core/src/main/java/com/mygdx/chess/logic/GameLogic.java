@@ -6,6 +6,9 @@ import java.util.Iterator;
 import java.util.List;
 
 public class GameLogic {
+
+    private static GameLogic instance;
+
     private ChessPiece[][] board;
     private boolean whiteTurn;
 
@@ -13,6 +16,19 @@ public class GameLogic {
     private int enPassantTargetX = -1;
     private int enPassantTargetY = -1;
     private ChessPiece enPassantVulnerablePawn = null;
+
+
+
+    // Singleton Design Pattern
+    public static synchronized GameLogic getInstance() {
+        if (instance == null) {
+            instance = new GameLogic();
+        }
+        return instance;
+    }
+
+
+
 
     public GameLogic() {
         board = new ChessPiece[8][8];
@@ -295,4 +311,14 @@ public class GameLogic {
                 return p.getYPos();
         return -1;
     }
+
+
+    public void reset() {
+        board = new ChessPiece[8][8];
+        whiteTurn = true;
+        enPassantTargetX = -1;
+        enPassantTargetY = -1;
+        enPassantVulnerablePawn = null;
+    }
+
 }
