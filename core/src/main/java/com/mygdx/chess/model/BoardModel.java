@@ -20,30 +20,17 @@ public class BoardModel implements IBoardModel {
     public BoardModel(boolean flip) {
         this.flip = flip;
         GameLogic.getInstance().reset();
-        initializePieces();
     }
 
-    private void initializePieces() {
-        // White pawns
-        for (int x = 0; x < 8; x++) pieces.add(new ChessPiece("white", "pawn", x, 1));
-        // Black pawns
-        for (int x = 0; x < 8; x++) pieces.add(new ChessPiece("black", "pawn", x, 6));
-        // Back ranks
-        String[] order = {"rook","knight","bishop","queen","king","bishop","knight","rook"};
-        for (int i = 0; i < 8; i++) {
-            pieces.add(new ChessPiece("white", order[i], i, 0));
-            pieces.add(new ChessPiece("black", order[i], i, 7));
-        }
-    }
-
-    @Override public List<Move> getPossibleMoves() {
+    @Override
+    public List<Move> getPossibleMoves() {
         return possibleMoves;
     }
 
-    @Override public void setPossibleMoves(List<Move> moves) {
+    @Override
+    public void setPossibleMoves(List<Move> moves) {
         this.possibleMoves = moves;
     }
-
 
     @Override
     public List<ChessPiece> getPieces() {
@@ -59,15 +46,6 @@ public class BoardModel implements IBoardModel {
     public boolean isFlipped() {
         return flip;
     }
-
-
-
-
-
-
-
-
-
 
     @Override
     public GameMemento createMemento() {
@@ -96,6 +74,4 @@ public class BoardModel implements IBoardModel {
             memento.getEnPassantPawn()
         );
     }
-
 }
-
