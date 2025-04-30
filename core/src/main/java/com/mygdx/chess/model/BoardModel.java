@@ -3,6 +3,7 @@ package com.mygdx.chess.model;
 import com.mygdx.chess.actors.ChessPiece;
 import com.mygdx.chess.logic.GameLogic;
 import com.mygdx.chess.logic.Move;
+import com.mygdx.chess.memento.GameMemento;
 
 import java.util.ArrayList;
 import java.util.List;
@@ -58,5 +59,43 @@ public class BoardModel implements IBoardModel {
     public boolean isFlipped() {
         return flip;
     }
+
+
+
+
+
+
+
+
+
+
+    @Override
+    public GameMemento createMemento() {
+        return new GameMemento(
+            getPieces(),
+            logic.isWhiteTurn(),
+            logic.getEnPassantTargetX(),
+            logic.getEnPassantTargetY(),
+            logic.getEnPassantVulnerablePawn()
+        );
+    }
+
+    @Override
+    public void restoreMemento(GameMemento memento) {
+        pieces.clear();
+        pieces.addAll(memento.getPieceSnapshot());
+
+        logic.updateBoardState(pieces); // Sync logic’s internal board
+        if (memento.isWhiteTurn() != logic.isWhiteTurn()) {
+            logic.toggleTurn(); // Fix turn
+        }
+
+        logic.setEnPassantTarget(
+            memento.getEnPassantX(),
+            memento.getEnPassantY(),
+            memento.getEnPassantPawn()
+        );
+    }
+
 }
 
