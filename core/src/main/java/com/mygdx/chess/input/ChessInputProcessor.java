@@ -7,6 +7,7 @@ import com.badlogic.gdx.math.Vector3;
 import com.mygdx.chess.ChessGame;
 import com.mygdx.chess.actors.ChessPiece;
 
+import com.mygdx.chess.decorator.HighlightDecorator;
 import com.mygdx.chess.logic.GameLogic;
 import com.mygdx.chess.logic.Move;
 import com.mygdx.chess.memento.GameMemento;
@@ -123,10 +124,18 @@ public class ChessInputProcessor implements InputProcessor, IGameInputProcessor 
                 );
             }
 
+
+
+            // ---- CLEAR EXISTING HIGHLIGHTS ----
+            for (ChessPiece p : pieces) {
+                p.clearDecorators(); // remove any existing highlights
+            }
+
             // ---- MOVE PIECE ----
             selected.setPosition(boardX, boardY);
 
-
+            // ---- HIGHLIGHT THIS PIECE ----
+            selected.addDecorator(new HighlightDecorator());
 
 
 
@@ -198,6 +207,12 @@ public class ChessInputProcessor implements InputProcessor, IGameInputProcessor 
             if (!mementoStack.isEmpty()) {
                 GameMemento last = mementoStack.pop();
                 boardModel.restoreMemento(last);
+
+                //For Decorator.
+                for (ChessPiece p : boardModel.getPieces()) {
+                    p.clearDecorators();
+                }
+
                 boardModel.setPossibleMoves(null);
             }
             return true;
