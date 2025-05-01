@@ -14,8 +14,6 @@ public class HighlightDecorator implements PieceDecorator {
 
         shapeRenderer.setProjectionMatrix(batch.getProjectionMatrix());
         shapeRenderer.begin(ShapeRenderer.ShapeType.Line);
-        shapeRenderer.setColor(Color.YELLOW);
-        //shapeRenderer.setLineWidth(3f);
 
         int x = piece.getXPos();
         int y = piece.getYPos();
@@ -26,7 +24,16 @@ public class HighlightDecorator implements PieceDecorator {
         float rectY = drawY * squareSize + 1f;
         float rectSize = squareSize - 2f;
 
+        // Outer glow
+        shapeRenderer.setColor(Color.BLACK);
+        shapeRenderer.rect(rectX - 1, rectY - 1, rectSize + 2, rectSize + 2);
+
+        // Middle bright gold
+        shapeRenderer.setColor(new Color(1f, 0.85f, 0f, 1f));
         shapeRenderer.rect(rectX, rectY, rectSize, rectSize);
+
+        // Inner outline to thicken
+        shapeRenderer.rect(rectX + 1.5f, rectY + 1.5f, rectSize - 3f, rectSize - 3f);
 
         shapeRenderer.end();
         batch.begin();
