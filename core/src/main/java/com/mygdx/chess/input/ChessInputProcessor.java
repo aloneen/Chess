@@ -1,5 +1,6 @@
 package com.mygdx.chess.input;
 
+import com.badlogic.gdx.Gdx;
 import com.badlogic.gdx.Input;
 import com.badlogic.gdx.InputProcessor;
 import com.badlogic.gdx.graphics.OrthographicCamera;
@@ -15,6 +16,7 @@ import com.mygdx.chess.model.IBoardModel;
 import com.mygdx.chess.screens.BotGameScreen;
 import com.mygdx.chess.screens.PromotionScreen;
 import com.mygdx.chess.screens.GameOverScreen;
+import com.mygdx.chess.sound.SoundManager;
 import com.mygdx.chess.view.IChessRenderer;
 
 import java.util.Iterator;
@@ -111,18 +113,26 @@ public class ChessInputProcessor implements InputProcessor, IGameInputProcessor 
                 }
             }
 
-            // ---- CAPTURE / EN PASSANT ----
+            boolean wasCapture = false;
+
+
+            // EN Passant
             if (isEnPassant) {
                 int capY = selected.getColor().equalsIgnoreCase("white")
                     ? boardY - 1 : boardY + 1;
-                pieces.removeIf(p -> p.getXPos() == boardX && p.getYPos() == capY);
+                wasCapture = pieces.removeIf(p -> p.getXPos() == boardX && p.getYPos() == capY);
             } else {
-                pieces.removeIf(p ->
+                wasCapture = pieces.removeIf(p ->
                     p != selected
                         && p.getXPos() == boardX
                         && p.getYPos() == boardY
                 );
             }
+            // FACADE
+            if (wasCapture) {
+                SoundManager.playCapture();
+            }
+
 
 
 
@@ -133,6 +143,16 @@ public class ChessInputProcessor implements InputProcessor, IGameInputProcessor 
 
             // ---- MOVE PIECE ----
             selected.setPosition(boardX, boardY);
+
+
+            //FACADE
+            if (wasCapture) {
+                SoundManager.playCapture();
+            } else {
+                SoundManager.playMove();
+            }
+
+
 
             // ---- HIGHLIGHT THIS PIECE ----
             selected.addDecorator(new HighlightDecorator());
@@ -155,6 +175,7 @@ public class ChessInputProcessor implements InputProcessor, IGameInputProcessor 
             if (selected.getType().equalsIgnoreCase("pawn")
                 && ((selected.getColor().equalsIgnoreCase("white") && boardY == 7)
                 || (selected.getColor().equalsIgnoreCase("black") && boardY == 0))) {
+                SoundManager.playPromote();
                 ChessPiece pawn = selected;
                 selected = null;
                 boardModel.setPossibleMoves(null);
@@ -163,6 +184,8 @@ public class ChessInputProcessor implements InputProcessor, IGameInputProcessor 
                 ));
                 return true;
             }
+
+
 
             // ---- RECORD HUMAN MOVE FOR BOT ----
             if (game.getScreen() instanceof BotGameScreen) {
@@ -174,6 +197,7 @@ public class ChessInputProcessor implements InputProcessor, IGameInputProcessor 
             logic.toggleTurn();
             String next = logic.isWhiteTurn() ? "white" : "black";
             if (logic.isCheckmate(next, pieces)) {
+                SoundManager.playCheck();
                 String winner = next.equals("white") ? "Black" : "White";
                 game.setScreen(new GameOverScreen(
                     game, "Checkmate! " + winner + " wins."
@@ -217,6 +241,11 @@ public class ChessInputProcessor implements InputProcessor, IGameInputProcessor 
             }
             return true;
         }
+
+        if (Gdx.input.isKeyPressed(Input.Keys.M)) {
+            SoundManager.playMove();
+        }
+
         return false;
     }
 
