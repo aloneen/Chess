@@ -8,6 +8,7 @@ import com.badlogic.gdx.graphics.OrthographicCamera;
 import com.badlogic.gdx.graphics.g2d.SpriteBatch;
 import com.mygdx.chess.ChessGame;
 import com.mygdx.chess.actors.ChessPiece;
+import com.mygdx.chess.decorator.HighlightDecorator;
 import com.mygdx.chess.factory.BoardModelFactory;
 import com.mygdx.chess.input.ChessInputProcessor;
 import com.mygdx.chess.logic.GameLogic;
@@ -234,6 +235,26 @@ public class BotGameScreen implements Screen {
 
                             // f) switch and endgame
                             logic.toggleTurn();
+
+                            //DECORATOR
+
+
+                            // Clear all existing decorators
+                            for (ChessPiece p : pieces) {
+                                p.clearDecorators();
+                            }
+
+                            // Highlight the moved piece
+                            ChessPiece finalPiece = (isPromo && promType != null)
+                                ? findPieceAt(tx, ty)
+                                : mover;
+
+                            if (finalPiece != null) {
+                                finalPiece.addDecorator(new HighlightDecorator());
+                            }
+
+
+
                             String next = logic.isWhiteTurn() ? "white" : "black";
                             if (logic.isCheckmate(next, pieces)) {
                                 String winner = next.equals("white") ? "Black" : "White";
