@@ -14,6 +14,7 @@ import com.mygdx.chess.input.ChessInputProcessor;
 import com.mygdx.chess.logic.GameLogic;
 import com.mygdx.chess.model.BoardModel;
 import com.mygdx.chess.model.IBoardModel;
+import com.mygdx.chess.sound.SoundManager;
 import com.mygdx.chess.view.ChessRenderer;
 import com.mygdx.chess.view.IChessRenderer;
 
@@ -200,11 +201,23 @@ public class BotGameScreen implements Screen {
                             }
                         }
 
-                        // c) remove capture
+//                        // c) remove capture
+//                        Iterator<ChessPiece> it = pieces.iterator();
+//                        while (it.hasNext()) {
+//                            ChessPiece p = it.next();
+//                            if (p.getXPos() == tx && p.getYPos() == ty && p != mover) {
+//                                it.remove();
+//                                break;
+//                            }
+//                        }
+
+                        // === CAPTURE DETECTION FIRST ===
+                        boolean isCapture = false;
                         Iterator<ChessPiece> it = pieces.iterator();
                         while (it.hasNext()) {
                             ChessPiece p = it.next();
                             if (p.getXPos() == tx && p.getYPos() == ty && p != mover) {
+                                isCapture = true;
                                 it.remove();
                                 break;
                             }
@@ -228,7 +241,35 @@ public class BotGameScreen implements Screen {
                                     logic.clearEnPassantTarget();
                                 }
                                 mover.setPosition(tx, ty);
+
+                                // === SOUND LOGIC ===
+                                if (isPromo && promType != null) {
+                                    SoundManager.playPromote();
+                                } else {
+                                    boolean captured = false;
+                                    for (ChessPiece p : pieces) {
+                                        if (p != mover && p.getXPos() == tx && p.getYPos() == ty) {
+                                            captured = true;
+                                            break;
+                                        }
+                                    }
+                                    if (captured) {
+                                        SoundManager.playCapture();
+                                    } else {
+                                        SoundManager.playMove();
+                                    }
+                                }
                             }
+
+
+                            if (isPromo && promType != null) {
+                                SoundManager.playPromote();
+                            } else if (isCapture) {
+                                SoundManager.playCapture();
+                            } else {
+                                SoundManager.playMove();
+                            }
+
 
                             // e) record
                             moveHistory.add(uci);
