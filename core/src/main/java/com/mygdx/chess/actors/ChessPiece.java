@@ -1,8 +1,11 @@
-// File: ChessPiece.java
 package com.mygdx.chess.actors;
 
 import com.badlogic.gdx.graphics.Texture;
 import com.badlogic.gdx.graphics.g2d.SpriteBatch;
+import com.mygdx.chess.decorator.PieceDecorator;
+
+import java.util.ArrayList;
+import java.util.List;
 import java.util.Objects;
 
 /**
@@ -16,6 +19,12 @@ public class ChessPiece implements Cloneable {
     private final Texture texture;
     private boolean hasMoved;
 
+
+
+    private List<PieceDecorator> decorators = new ArrayList<>();
+
+
+
     public ChessPiece(String color, String type, int xPos, int yPos) {
         this.color = color;
         this.type = type;
@@ -25,6 +34,14 @@ public class ChessPiece implements Cloneable {
         this.texture = new Texture(
             com.badlogic.gdx.Gdx.files.internal("images/" + color + "_" + type + ".png")
         );
+    }
+
+    public void addDecorator(PieceDecorator decorator) {
+        decorators.add(decorator);
+    }
+
+    public void clearDecorators() {
+        decorators.clear();
     }
 
     /**
@@ -41,6 +58,13 @@ public class ChessPiece implements Cloneable {
                        float pieceSize,
                        float offset,
                        boolean flip) {
+
+
+        for (PieceDecorator d : decorators) {
+            d.render(this, batch, squareSize, pieceSize, offset, flip);
+        }
+
+
         int dx = flip ? 7 - xPos : xPos;
         int dy = flip ? 7 - yPos : yPos;
 
