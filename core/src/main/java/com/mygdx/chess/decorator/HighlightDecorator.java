@@ -29,7 +29,7 @@ public class HighlightDecorator implements PieceDecorator {
         shapeRenderer.rect(rectX - 1, rectY - 1, rectSize + 2, rectSize + 2);
 
         // Middle bright gold
-        shapeRenderer.setColor(new Color(1f, 0.85f, 0f, 1f));
+        shapeRenderer.setColor(Color.GREEN);
         shapeRenderer.rect(rectX, rectY, rectSize, rectSize);
 
         // Inner outline to thicken
