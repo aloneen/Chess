@@ -6,6 +6,7 @@ import com.badlogic.gdx.graphics.g2d.SpriteBatch;
 import com.mygdx.chess.actors.ChessPiece;
 import com.mygdx.chess.logic.Move;
 import com.mygdx.chess.model.IBoardModel;
+import com.mygdx.chess.proxy.TextureProxy;
 
 import java.util.List;
 
@@ -19,8 +20,10 @@ public class ChessRenderer implements IChessRenderer {
 
     public ChessRenderer(IBoardModel model) {
         this.model    = model;
-        this.boardTex = new Texture(Gdx.files.internal("images/chess_board.png"));
-        this.dotTex   = new Texture(Gdx.files.internal("images/move_indicator.png"));
+//        this.boardTex = new Texture(Gdx.files.internal("images/chess_board.png"));
+//        this.dotTex   = new Texture(Gdx.files.internal("images/move_indicator.png"));
+        this.boardTex = TextureProxy.get("images/chess_board.png");
+        this.dotTex   = TextureProxy.get("images/move_indicator.png");
     }
 
     @Override
