@@ -31,7 +31,7 @@ public class ChessRenderer implements IChessRenderer {
         // 1) Draw board background
         batch.draw(boardTex, 0, 0, BOARD_SIZE, BOARD_SIZE);
 
-        batch.setColor(1f,1f,1f,0.7f);
+        batch.setColor(1f,1f,1f,1f);
 
         float pieceSize   = SQUARE_SIZE * 0.8f;
         float offset      = (SQUARE_SIZE - pieceSize) / 2f;
