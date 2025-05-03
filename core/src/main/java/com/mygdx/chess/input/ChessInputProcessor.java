@@ -197,7 +197,6 @@ public class ChessInputProcessor implements InputProcessor, IGameInputProcessor 
             logic.toggleTurn();
             String next = logic.isWhiteTurn() ? "white" : "black";
             if (logic.isCheckmate(next, pieces)) {
-                SoundManager.playCheck();
                 String winner = next.equals("white") ? "Black" : "White";
                 game.setScreen(new GameOverScreen(
                     game, "Checkmate! " + winner + " wins."
