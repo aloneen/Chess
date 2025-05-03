@@ -1,3 +1,4 @@
+// src/main/java/com/mygdx/chess/screens/PromotionScreen.java
 package com.mygdx.chess.screens;
 
 import com.badlogic.gdx.Gdx;
@@ -9,33 +10,31 @@ import com.badlogic.gdx.scenes.scene2d.ui.Skin;
 import com.badlogic.gdx.scenes.scene2d.ui.Table;
 import com.badlogic.gdx.scenes.scene2d.ui.TextButton;
 import com.badlogic.gdx.scenes.scene2d.utils.ClickListener;
-import com.mygdx.chess.ChessGame;
 import com.mygdx.chess.actors.ChessPiece;
-import com.mygdx.chess.input.ChessInputProcessor;
-import com.mygdx.chess.logic.GameLogic;
-import com.mygdx.chess.model.IBoardModel;
-import com.mygdx.chess.view.IChessRenderer;
 
 public class PromotionScreen implements Screen {
-    private final ChessGame    game;
-    private final IBoardModel   model;
-    private final IChessRenderer renderer;
+    private final BotGameScreen parent;
     private final ChessPiece    pawn;
+    private final int           fx, fy, tx, ty;
     private final Stage         stage;
     private final Skin          skin;
 
+    /** fx,fy = origin; tx,ty = target promotion square */
     public PromotionScreen(
-        ChessGame game,
-        IBoardModel model,
-        IChessRenderer renderer,
-        ChessPiece pawn
+        BotGameScreen parent,
+        ChessPiece pawn,
+        int fx, int fy,
+        int tx, int ty
     ) {
-        this.game     = game;
-        this.model    = model;
-        this.renderer = renderer;
-        this.pawn     = pawn;
-        this.stage    = new Stage();
-        this.skin     = new Skin(Gdx.files.internal("skins/uiskin.json"));
+        this.parent = parent;
+        this.pawn   = pawn;
+        this.fx     = fx;
+        this.fy     = fy;
+        this.tx     = tx;
+        this.ty     = ty;
+
+        stage = new Stage();
+        skin  = new Skin(Gdx.files.internal("skins/uiskin.json"));
 
         Table table = new Table();
         table.setFillParent(true);
@@ -46,10 +45,10 @@ public class PromotionScreen implements Screen {
         TextButton bishop = new TextButton("Bishop", skin);
         TextButton knight = new TextButton("Knight", skin);
 
-        queen.addListener(  new ClickListener(){ public void clicked(InputEvent e,float x,float y){promote("queen");}});
-        rook.addListener(   new ClickListener(){ public void clicked(InputEvent e,float x,float y){promote("rook");}});
-        bishop.addListener( new ClickListener(){ public void clicked(InputEvent e,float x,float y){promote("bishop");}});
-        knight.addListener( new ClickListener(){ public void clicked(InputEvent e,float x,float y){promote("knight");}});
+        queen.addListener(listener("queen"));
+        rook.addListener(listener("rook"));
+        bishop.addListener(listener("bishop"));
+        knight.addListener(listener("knight"));
 
         table.add(queen).pad(10).row();
         table.add(rook).pad(10).row();
@@ -57,44 +56,26 @@ public class PromotionScreen implements Screen {
         table.add(knight).pad(10);
     }
 
-    private void promote(String newType) {
-        // 1) Replace pawn in the model
-        int x = pawn.getXPos(), y = pawn.getYPos();
-        model.getPieces().remove(pawn);
-        model.getPieces().add(new ChessPiece(pawn.getColor(), newType, x, y));
-
-        // 2) Toggle turn
-        GameLogic logic = model.getGameLogic();
-        logic.toggleTurn();
-
-        // 3) Return to the right screen
-        if (game.getScreen() instanceof BotGameScreen) {
-            BotGameScreen prev = (BotGameScreen)game.getScreen();
-            // you’ll need a getter for difficulty:
-            game.setScreen(new BotGameScreen(
-                game,
-                prev.getDifficulty(),    // add this getter
-                prev.isHumanWhite()
-            ));
-        } else {
-            game.setScreen(new GameScreen(
-                game,
-                model,
-                renderer
-            ));
-        }
+    private ClickListener listener(String pieceType) {
+        return new ClickListener() {
+            @Override public void clicked(InputEvent e, float x, float y) {
+                parent.applyPromotion(pawn, fx, fy, tx, ty, pieceType);
+                parent.getGame().setScreen(parent);
+            }
+        };
     }
 
     @Override public void show()    { Gdx.input.setInputProcessor(stage); }
     @Override public void render(float dt) {
         Gdx.gl.glClear(GL20.GL_COLOR_BUFFER_BIT);
-        stage.act(dt); stage.draw();
+        stage.act(dt);
+        stage.draw();
     }
-    @Override public void resize(int w,int h){ stage.getViewport().update(w,h,true); }
-    @Override public void pause()  {}
-    @Override public void resume() {}
-    @Override public void hide()   {}
-    @Override public void dispose(){
+    @Override public void resize(int w, int h) { stage.getViewport().update(w,h,true); }
+    @Override public void pause()   {}
+    @Override public void resume()  {}
+    @Override public void hide()    {}
+    @Override public void dispose() {
         stage.dispose();
         skin.dispose();
     }

@@ -7,10 +7,8 @@ import com.badlogic.gdx.graphics.OrthographicCamera;
 import com.badlogic.gdx.math.Vector3;
 import com.mygdx.chess.ChessGame;
 import com.mygdx.chess.actors.ChessPiece;
-
 import com.mygdx.chess.decorator.HighlightDecorator;
 import com.mygdx.chess.logic.GameLogic;
-import com.mygdx.chess.logic.Move;
 import com.mygdx.chess.memento.GameMemento;
 import com.mygdx.chess.model.IBoardModel;
 import com.mygdx.chess.screens.BotGameScreen;
@@ -30,7 +28,7 @@ import static com.mygdx.chess.util.BoardConfig.SQUARE_SIZE;
  * including en passant, castling, and bot‐turn restrictions.
  */
 public class ChessInputProcessor implements InputProcessor, IGameInputProcessor {
-    private final ChessGame         game;
+    private final ChessGame          game;
     private final IBoardModel        boardModel;
     private final OrthographicCamera camera;
     private final IChessRenderer     renderer;
@@ -56,7 +54,6 @@ public class ChessInputProcessor implements InputProcessor, IGameInputProcessor 
         GameLogic logic = boardModel.getGameLogic();
         List<ChessPiece> pieces = boardModel.getPieces();
         mementoStack.push(boardModel.createMemento());
-
 
         // 1) Bot‐mode: ignore taps when it's the engine’s turn
         if (game.getScreen() instanceof BotGameScreen) {
@@ -113,14 +110,15 @@ public class ChessInputProcessor implements InputProcessor, IGameInputProcessor 
                 }
             }
 
-            boolean wasCapture = false;
+            boolean wasCapture;
 
-
-            // EN Passant
+            // ---- EN PASSANT ----
             if (isEnPassant) {
                 int capY = selected.getColor().equalsIgnoreCase("white")
                     ? boardY - 1 : boardY + 1;
-                wasCapture = pieces.removeIf(p -> p.getXPos() == boardX && p.getYPos() == capY);
+                wasCapture = pieces.removeIf(
+                    p -> p.getXPos() == boardX && p.getYPos() == capY
+                );
             } else {
                 wasCapture = pieces.removeIf(p ->
                     p != selected
@@ -128,38 +126,25 @@ public class ChessInputProcessor implements InputProcessor, IGameInputProcessor 
                         && p.getYPos() == boardY
                 );
             }
-            // FACADE
+
             if (wasCapture) {
                 SoundManager.playCapture();
             }
 
-
-
-
             // ---- CLEAR EXISTING HIGHLIGHTS ----
             for (ChessPiece p : pieces) {
-                p.clearDecorators(); // remove any existing highlights
+                p.clearDecorators();
             }
 
             // ---- MOVE PIECE ----
             selected.setPosition(boardX, boardY);
 
-
-            //FACADE
-            if (wasCapture) {
-                SoundManager.playCapture();
-            } else {
+            if (!wasCapture) {
                 SoundManager.playMove();
             }
 
-
-
             // ---- HIGHLIGHT THIS PIECE ----
             selected.addDecorator(new HighlightDecorator());
-
-
-
-
 
             // ---- SET/CLEAR EN PASSANT TARGET ----
             if (selected.getType().equalsIgnoreCase("pawn")
@@ -174,18 +159,26 @@ public class ChessInputProcessor implements InputProcessor, IGameInputProcessor 
             // ---- PROMOTION ----
             if (selected.getType().equalsIgnoreCase("pawn")
                 && ((selected.getColor().equalsIgnoreCase("white") && boardY == 7)
-                || (selected.getColor().equalsIgnoreCase("black") && boardY == 0))) {
+                || (selected.getColor().equalsIgnoreCase("black") && boardY == 0)))
+            {
                 SoundManager.playPromote();
                 ChessPiece pawn = selected;
+                int fx = startX;
+                int fy = startY;
+                int tx = boardX;
+                int ty = boardY;
+
                 selected = null;
                 boardModel.setPossibleMoves(null);
-                game.setScreen(new PromotionScreen(
-                    game, boardModel, renderer, pawn
-                ));
-                return true;
+
+                if (game.getScreen() instanceof BotGameScreen) {
+                    BotGameScreen bgs = (BotGameScreen)game.getScreen();
+                    game.setScreen(new PromotionScreen(
+                        bgs, pawn, fx, fy, tx, ty
+                    ));
+                    return true;
+                }
             }
-
-
 
             // ---- RECORD HUMAN MOVE FOR BOT ----
             if (game.getScreen() instanceof BotGameScreen) {
@@ -219,45 +212,30 @@ public class ChessInputProcessor implements InputProcessor, IGameInputProcessor 
         return true;
     }
 
-
-
-
-
-    // Other InputProcessor stubs — no changes
     @Override
     public boolean keyDown(int keycode) {
         if (!(game.getScreen() instanceof BotGameScreen) && keycode == Input.Keys.R) {
             if (!mementoStack.isEmpty()) {
                 GameMemento last = mementoStack.pop();
                 boardModel.restoreMemento(last);
-
-                //For Decorator.
                 for (ChessPiece p : boardModel.getPieces()) {
                     p.clearDecorators();
                 }
-
                 boardModel.setPossibleMoves(null);
             }
             return true;
         }
-
         if (Gdx.input.isKeyPressed(Input.Keys.M)) {
             SoundManager.playMove();
         }
-
         return false;
     }
 
-    @Override public boolean keyUp(int keycode)                     { return false; }
-    @Override public boolean keyTyped(char character)               { return false; }
-    @Override public boolean touchUp(int x, int y, int p, int b)    { return false; }
-
-    @Override
-    public boolean touchCancelled(int i, int i1, int i2, int i3) {
-        return false;
-    }
-
-    @Override public boolean touchDragged(int x, int y, int p)      { return false; }
-    @Override public boolean mouseMoved(int x, int y)               { return false; }
-    @Override public boolean scrolled(float ax, float ay)           { return false; }
+    @Override public boolean keyUp(int keycode)                  { return false; }
+    @Override public boolean keyTyped(char character)            { return false; }
+    @Override public boolean touchUp(int x, int y, int p, int b) { return false; }
+    @Override public boolean touchCancelled(int x, int y, int p, int b) { return false; }
+    @Override public boolean touchDragged(int x, int y, int p)   { return false; }
+    @Override public boolean mouseMoved(int x, int y)            { return false; }
+    @Override public boolean scrolled(float amountX, float amountY) { return false; }
 }
