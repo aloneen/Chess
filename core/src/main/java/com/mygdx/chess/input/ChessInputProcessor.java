@@ -25,7 +25,8 @@ import static com.mygdx.chess.util.BoardConfig.SQUARE_SIZE;
 
 /**
  * Processes touch input for selecting and moving pieces,
- * including en passant, castling, and bot‐turn restrictions.
+ * including en passant, castling, and promotion in both
+ * Bot-vs-Human and Human-vs-Human modes.
  */
 public class ChessInputProcessor implements InputProcessor, IGameInputProcessor {
     private final ChessGame          game;
@@ -51,11 +52,12 @@ public class ChessInputProcessor implements InputProcessor, IGameInputProcessor 
 
     @Override
     public boolean touchDown(int screenX, int screenY, int pointer, int button) {
-        GameLogic logic = boardModel.getGameLogic();
+        GameLogic logic  = boardModel.getGameLogic();
         List<ChessPiece> pieces = boardModel.getPieces();
+        // Save state for undo
         mementoStack.push(boardModel.createMemento());
 
-        // 1) Bot‐mode: ignore taps when it's the engine’s turn
+        // 1) If it's a BotGameScreen, ignore taps when it's the engine’s turn
         if (game.getScreen() instanceof BotGameScreen) {
             BotGameScreen bgs = (BotGameScreen)game.getScreen();
             boolean whiteToMove = logic.isWhiteTurn();
@@ -64,7 +66,7 @@ public class ChessInputProcessor implements InputProcessor, IGameInputProcessor 
             if (!humanTurn) return false;
         }
 
-        // 2) Convert to board coords
+        // 2) Translate screen coords → board coords
         Vector3 world = camera.unproject(new Vector3(screenX, screenY, 0));
         int rawX = (int)(world.x / SQUARE_SIZE);
         int rawY = (int)(world.y / SQUARE_SIZE);
@@ -72,47 +74,50 @@ public class ChessInputProcessor implements InputProcessor, IGameInputProcessor 
         int boardX = flip ? 7 - rawX : rawX;
         int boardY = flip ? 7 - rawY : rawY;
 
-        // 3) Select piece
+        // 3) Select a piece if none is currently selected
         if (selected == null) {
             for (ChessPiece p : pieces) {
                 if (p.getXPos() == boardX && p.getYPos() == boardY) {
                     selected = p;
-                    boardModel.setPossibleMoves(logic.getPossibleMoves(p, pieces));
+                    boardModel.setPossibleMoves(
+                        logic.getPossibleMoves(p, pieces)
+                    );
                     return true;
                 }
             }
             return false;
         }
 
-        // 4) Attempt move
+        // 4) We have a selected piece → try to move it
         int startX = selected.getXPos();
         int startY = selected.getYPos();
-
         boolean isEnPassant = selected.getType().equalsIgnoreCase("pawn")
             && Math.abs(boardX - startX) == 1
             && boardY == logic.getEnPassantTargetY()
             && boardX == logic.getEnPassantTargetX();
 
         if (logic.isValidMove(selected, boardX, boardY, pieces)) {
-            // ---- CASTLING ----
+            // — CASTLING —
             if (selected.getType().equalsIgnoreCase("king")
                 && Math.abs(boardX - startX) == 2) {
                 int rookStartX = (boardX > startX) ? 7 : 0;
-                int rookDestX  = (boardX > startX) ? boardX - 1 : boardX + 1;
+                int rookDestX  = (boardX > startX)
+                    ? boardX - 1
+                    : boardX + 1;
                 for (ChessPiece p : pieces) {
                     if (p.getType().equalsIgnoreCase("rook")
                         && p.getXPos() == rookStartX
                         && p.getYPos() == startY
-                        && p.getColor().equals(selected.getColor())) {
+                        && p.getColor().equals(selected.getColor()))
+                    {
                         p.setPosition(rookDestX, startY);
                         break;
                     }
                 }
             }
 
+            // — CAPTURE or EN PASSANT —
             boolean wasCapture;
-
-            // ---- EN PASSANT ----
             if (isEnPassant) {
                 int capY = selected.getColor().equalsIgnoreCase("white")
                     ? boardY - 1 : boardY + 1;
@@ -126,67 +131,67 @@ public class ChessInputProcessor implements InputProcessor, IGameInputProcessor 
                         && p.getYPos() == boardY
                 );
             }
+            if (wasCapture) SoundManager.playCapture();
 
-            if (wasCapture) {
-                SoundManager.playCapture();
-            }
+            // — CLEAR HIGHLIGHTS —
+            for (ChessPiece p : pieces) p.clearDecorators();
 
-            // ---- CLEAR EXISTING HIGHLIGHTS ----
-            for (ChessPiece p : pieces) {
-                p.clearDecorators();
-            }
-
-            // ---- MOVE PIECE ----
+            // — MOVE THE PIECE —
             selected.setPosition(boardX, boardY);
+            if (!wasCapture) SoundManager.playMove();
 
-            if (!wasCapture) {
-                SoundManager.playMove();
-            }
-
-            // ---- HIGHLIGHT THIS PIECE ----
+            // — HIGHLIGHT MOVED PIECE —
             selected.addDecorator(new HighlightDecorator());
 
-            // ---- SET/CLEAR EN PASSANT TARGET ----
+            // — SET/CLEAR EN PASSANT TARGET —
             if (selected.getType().equalsIgnoreCase("pawn")
-                && Math.abs(boardY - startY) == 2) {
+                && Math.abs(boardY - startY) == 2)
+            {
                 int targetY = selected.getColor().equalsIgnoreCase("white")
-                    ? startY + 1 : startY - 1;
+                    ? startY + 1
+                    : startY - 1;
                 logic.setEnPassantTarget(startX, targetY, selected);
             } else {
                 logic.clearEnPassantTarget();
             }
 
-            // ---- PROMOTION ----
+            // — PROMOTION —
             if (selected.getType().equalsIgnoreCase("pawn")
                 && ((selected.getColor().equalsIgnoreCase("white") && boardY == 7)
                 || (selected.getColor().equalsIgnoreCase("black") && boardY == 0)))
             {
                 SoundManager.playPromote();
                 ChessPiece pawn = selected;
-                int fx = startX;
-                int fy = startY;
-                int tx = boardX;
-                int ty = boardY;
+                int fx = startX, fy = startY;
+                int tx = boardX,  ty = boardY;
 
                 selected = null;
                 boardModel.setPossibleMoves(null);
 
                 if (game.getScreen() instanceof BotGameScreen) {
+                    // Bot-vs-Human
                     BotGameScreen bgs = (BotGameScreen)game.getScreen();
                     game.setScreen(new PromotionScreen(
                         bgs, pawn, fx, fy, tx, ty
                     ));
                     return true;
+                } else {
+                    // Human-vs-Human
+                    game.setScreen(new PromotionScreen(
+                        game, boardModel, renderer, pawn,
+                        fx, fy, tx, ty
+                    ));
+                    return true;
                 }
             }
 
-            // ---- RECORD HUMAN MOVE FOR BOT ----
+            // — RECORD FOR BOT (if any) —
             if (game.getScreen() instanceof BotGameScreen) {
                 ((BotGameScreen)game.getScreen())
                     .recordHumanMove(startX, startY, boardX, boardY);
             }
 
-            // ---- TOGGLE TURN & ENDGAME ----
+            // — SWITCH TURNS & CHECK ENDGAME —
             logic.toggleTurn();
             String next = logic.isWhiteTurn() ? "white" : "black";
             if (logic.isCheckmate(next, pieces)) {
@@ -200,13 +205,13 @@ public class ChessInputProcessor implements InputProcessor, IGameInputProcessor 
                 ));
             }
 
-            // ---- CLEANUP ----
+            // — CLEAN UP —
             selected = null;
             boardModel.setPossibleMoves(null);
             return true;
         }
 
-        // ---- INVALID MOVE: DESELECT ----
+        // INVALID MOVE — DESELECT
         selected = null;
         boardModel.setPossibleMoves(null);
         return true;
@@ -214,15 +219,16 @@ public class ChessInputProcessor implements InputProcessor, IGameInputProcessor 
 
     @Override
     public boolean keyDown(int keycode) {
-        if (!(game.getScreen() instanceof BotGameScreen) && keycode == Input.Keys.R) {
-            if (!mementoStack.isEmpty()) {
-                GameMemento last = mementoStack.pop();
-                boardModel.restoreMemento(last);
-                for (ChessPiece p : boardModel.getPieces()) {
-                    p.clearDecorators();
-                }
-                boardModel.setPossibleMoves(null);
+        if (!(game.getScreen() instanceof BotGameScreen)
+            && keycode == Input.Keys.R
+            && !mementoStack.isEmpty())
+        {
+            GameMemento last = mementoStack.pop();
+            boardModel.restoreMemento(last);
+            for (ChessPiece p : boardModel.getPieces()) {
+                p.clearDecorators();
             }
+            boardModel.setPossibleMoves(null);
             return true;
         }
         if (Gdx.input.isKeyPressed(Input.Keys.M)) {
@@ -231,11 +237,11 @@ public class ChessInputProcessor implements InputProcessor, IGameInputProcessor 
         return false;
     }
 
-    @Override public boolean keyUp(int keycode)                  { return false; }
-    @Override public boolean keyTyped(char character)            { return false; }
+    @Override public boolean keyUp(int keycode)                 { return false; }
+    @Override public boolean keyTyped(char ch)                  { return false; }
     @Override public boolean touchUp(int x, int y, int p, int b) { return false; }
     @Override public boolean touchCancelled(int x, int y, int p, int b) { return false; }
     @Override public boolean touchDragged(int x, int y, int p)   { return false; }
     @Override public boolean mouseMoved(int x, int y)            { return false; }
-    @Override public boolean scrolled(float amountX, float amountY) { return false; }
+    @Override public boolean scrolled(float ax, float ay)        { return false; }
 }
