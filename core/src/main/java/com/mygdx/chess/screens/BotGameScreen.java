@@ -81,27 +81,16 @@ public class BotGameScreen implements Screen {
     }
 
     /**
-     * Record a non‐promotion move.
+     * Record a non‑promotion move.
      */
     public void recordHumanMove(int fx, int fy, int tx, int ty) {
         recordHumanMove(fx, fy, tx, ty, '\0');
     }
 
     /**
-     * Record a (possibly promoted) move into moveHistory,
-     * flipping coordinates if human is Black.
-     *
-     * @param fx    source file 0–7
-     * @param fy    source rank 0–7
-     * @param tx    target file 0–7
-     * @param ty    target rank 0–7
-     * @param promo promotion char 'q','r','b','n' or '\0'
+     * Record a (possibly promoted) move into moveHistory.
      */
     private void recordHumanMove(int fx, int fy, int tx, int ty, char promo) {
-        if (!humanIsWhite) {
-            fx = 7 - fx; fy = 7 - fy;
-            tx = 7 - tx; ty = 7 - ty;
-        }
         StringBuilder uci = new StringBuilder()
             .append((char)('a' + fx))
             .append((char)('1' + fy))
@@ -110,7 +99,6 @@ public class BotGameScreen implements Screen {
         if (promo != '\0') uci.append(promo);
         moveHistory.add(uci.toString());
     }
-
 
     // ——————— ENGINE STARTUP ———————
 
@@ -135,7 +123,6 @@ public class BotGameScreen implements Screen {
             }
             sendUCI("setoption name UCI_Elo value " + elo);
             sendUCI("isready");
-            // consume the readyok
             String line;
             while (!(line = engineOut.readLine()).equals("readyok")) {
                 Gdx.app.log("BotGame", "Engine_out ▶ " + line);
@@ -176,9 +163,8 @@ public class BotGameScreen implements Screen {
 
     private void thinkAndMove() {
         try {
-            // 1) position
+            // 1) send position
             String moves = String.join(" ", moveHistory);
-            Gdx.app.log("BotGame", "UCI position: startpos moves " + moves);
             sendUCI("position startpos moves " + moves);
             sendUCI("isready");
             String line;
@@ -198,7 +184,6 @@ public class BotGameScreen implements Screen {
             // 3) read bestmove
             String best = null;
             while ((line = engineOut.readLine()) != null) {
-                Gdx.app.log("BotGame", "Engine_out ▶ " + line);
                 if (line.startsWith("bestmove")) {
                     best = line.split("\\s+")[1];
                     break;
@@ -206,12 +191,8 @@ public class BotGameScreen implements Screen {
             }
 
             if (best != null && best.length() >= 4) {
-                // apply on libGDX board, flipping if human is Black
                 final String engineUCI   = best;
-                final String uciToApply = humanIsWhite
-                    ? engineUCI
-                    : flipUCI(engineUCI);
-
+                final String uciToApply = engineUCI;
                 final int fx = uciToApply.charAt(0) - 'a';
                 final int fy = uciToApply.charAt(1) - '1';
                 final int tx = uciToApply.charAt(2) - 'a';
@@ -225,109 +206,83 @@ public class BotGameScreen implements Screen {
                     List<ChessPiece> pieces = model.getPieces();
                     ChessPiece mover = findPieceAt(fx, fy);
 
-                    // castling
-                    if (mover != null
-                        && mover.getType().equalsIgnoreCase("king")
-                        && Math.abs(tx - fx) == 2)
-                    {
+                    // 1) castling
+                    if (mover != null && mover.getType().equalsIgnoreCase("king") && Math.abs(tx - fx) == 2) {
                         int rookFromX = (tx > fx) ? 7 : 0;
                         int rookToX   = (tx > fx) ? fx + 1 : fx - 1;
                         ChessPiece rook = findPieceAt(rookFromX, fy);
-                        if (rook != null && rook.getType().equalsIgnoreCase("rook")) {
-                            rook.setPosition(rookToX, fy);
+                        if (rook != null && rook.getType().equalsIgnoreCase("rook")) rook.setPosition(rookToX, fy);
+                    }
+
+                    // 2) capture
+                    if (mover != null) {
+                        Iterator<ChessPiece> it = pieces.iterator();
+                        while (it.hasNext()) {
+                            ChessPiece p = it.next();
+                            if (p.getXPos() == tx && p.getYPos() == ty && p != mover) {
+                                it.remove();
+                                SoundManager.playCapture();
+                                break;
+                            }
                         }
                     }
 
-                    // capture
-                    boolean isCapture = false;
-                    Iterator<ChessPiece> it = pieces.iterator();
-                    while (it.hasNext()) {
-                        ChessPiece p = it.next();
-                        if (p.getXPos() == tx && p.getYPos() == ty && p != mover) {
-                            isCapture = true;
-                            it.remove();
-                            break;
-                        }
-                    }
-
-                    // move or promote
+                    // 3) move or promotion
                     if (mover != null) {
                         if (isPromo && promC != ' ') {
                             pieces.remove(mover);
-                            pieces.add(new ChessPiece(
-                                mover.getColor(),
-                                promTypeFromChar(promC),
-                                tx, ty
-                            ));
+                            pieces.add(new ChessPiece(mover.getColor(), promTypeFromChar(promC), tx, ty));
                             logic.clearEnPassantTarget();
                             SoundManager.playPromote();
                         } else {
-                            // en passant target
-                            if (mover.getType().equalsIgnoreCase("pawn")
-                                && Math.abs(ty - fy) == 2)
-                            {
-                                int midY = (fy + ty) / 2;
-                                logic.setEnPassantTarget(tx, midY, mover);
+                            if (mover.getType().equalsIgnoreCase("pawn") && Math.abs(ty - fy) == 2) {
+                                logic.setEnPassantTarget(tx, (fy + ty) / 2, mover);
                             } else {
                                 logic.clearEnPassantTarget();
                             }
                             mover.setPosition(tx, ty);
-
-                            // sound
-                            if (isCapture) SoundManager.playCapture();
-                            else            SoundManager.playMove();
-                        }
-
-                        // record into moveHistory for engine (always white-perspective)
-                        moveHistory.add(engineUCI);
-
-                        // toggle and decorators
-                        logic.toggleTurn();
-                        for (ChessPiece p : pieces) p.clearDecorators();
-                        ChessPiece moved = (isPromo && promC != ' ')
-                            ? findPieceAt(tx, ty) : mover;
-                        if (moved != null) moved.addDecorator(new HighlightDecorator());
-
-                        String next = logic.isWhiteTurn() ? "white" : "black";
-                        if (logic.isCheckmate(next, pieces)) {
-                            String winner = next.equals("white") ? "Black" : "White";
-                            game.setScreen(new GameOverScreen(
-                                game, "Checkmate! " + winner + " wins."
-                            ));
-                        } else if (logic.isStalemate(next, pieces)) {
-                            game.setScreen(new GameOverScreen(
-                                game, "Stalemate! The game is a draw."
-                            ));
+                            SoundManager.playMove();
                         }
                     }
 
+                    // 4) record engine move & toggle turn
+                    moveHistory.add(engineUCI);
+                    logic.toggleTurn();
+
+                    // 5) decorators & endgame
+                    for (ChessPiece p : pieces) p.clearDecorators();
+                    ChessPiece moved = (mover != null && isPromo) ? findPieceAt(tx, ty) : mover;
+                    if (moved != null) moved.addDecorator(new HighlightDecorator());
+                    String next = logic.isWhiteTurn() ? "white" : "black";
+                    if (logic.isCheckmate(next, pieces)) game.setScreen(new GameOverScreen(game, "Checkmate! " + (next.equals("white") ? "Black" : "White") + " wins."));
+                    else if (logic.isStalemate(next, pieces)) game.setScreen(new GameOverScreen(game, "Stalemate! The game is a draw."));
+
+                    // 6) done
                     botThinking = false;
                 });
-            } else {
-                botThinking = false;
-            }
+            } else botThinking = false;
         } catch (IOException | InterruptedException e) {
             Gdx.app.error("BotGame", "Bot thinking failed", e);
             botThinking = false;
         }
     }
 
-    /** Flip a UCI move (e.g. "e2e4") around the board for Black. */
-    private String flipUCI(String uci) {
-        int fx = 7 - (uci.charAt(0) - 'a');
-        int fy = 7 - (uci.charAt(1) - '1');
-        int tx = 7 - (uci.charAt(2) - 'a');
-        int ty = 7 - (uci.charAt(3) - '1');
-        StringBuilder sb = new StringBuilder();
-        sb.append((char)('a' + fx))
-            .append((char)('1' + fy))
-            .append((char)('a' + tx))
-            .append((char)('1' + ty));
-        if (uci.length() == 5) sb.append(uci.charAt(4));
-        return sb.toString();
+    /** Applies a human‑pawn promotion. */
+    public void applyPromotion(ChessPiece pawn, int fx, int fy, int tx, int ty, String newType) {
+        model.getPieces().remove(pawn);
+        model.getPieces().add(ChessPieceFactory.create(pawn.getColor(), newType, tx, ty));
+        logic.clearEnPassantTarget();
+        recordHumanMove(fx, fy, tx, ty, newType.toLowerCase().charAt(0));
+        logic.toggleTurn();
+        botThinking = false;
+        Gdx.input.setInputProcessor(new ChessInputProcessor(game, model, camera, renderer));
     }
 
-    /** Convert promotion letter to piece type string. */
+    private ChessPiece findPieceAt(int x, int y) {
+        for (ChessPiece p : model.getPieces()) if (p.getXPos() == x && p.getYPos() == y) return p;
+        return null;
+    }
+
     private String promTypeFromChar(char c) {
         switch (c) {
             case 'q': return "queen";
@@ -338,61 +293,13 @@ public class BotGameScreen implements Screen {
         }
     }
 
-    /** Finds the piece at board coordinates (x,y). */
-    private ChessPiece findPieceAt(int x, int y) {
-        for (ChessPiece p : model.getPieces()) {
-            if (p.getXPos() == x && p.getYPos() == y) return p;
-        }
-        return null;
-    }
-
-    /** Applies a human‐pawn promotion in this BotGameScreen instance. */
-    // in BotGameScreen.java, add this alongside your existing applyPromotion:
-
-    /**
-     * Promotion that knows both origin and target squares:
-     */
-    public void applyPromotion(
-        ChessPiece pawn,
-        int fx, int fy,
-        int tx, int ty,
-        String newType
-    ) {
-        // 1) Remove pawn + add new piece
-        model.getPieces().remove(pawn);
-        model.getPieces().add(
-            ChessPieceFactory.create(
-                pawn.getColor(), newType, tx, ty
-            )
-        );
-        logic.clearEnPassantTarget();
-
-        // 2) Record the real promotion UCI, flipping if needed:
-        char promoChar = newType.toLowerCase().charAt(0);
-        recordHumanMove(fx, fy, tx, ty, promoChar);
-
-        // 3) Toggle back to bot and unblock thinking
-        logic.toggleTurn();
-        botThinking = false;
-
-        // 4) Restore input
-        Gdx.input.setInputProcessor(new ChessInputProcessor(
-            game, model, camera, renderer
-        ));
-    }
-
-
-
-    // ——————— SCREEN STUBS ———————
-
     @Override public void resize(int w, int h) {}
     @Override public void show()    {}
     @Override public void hide()    {}
     @Override public void pause()   {}
     @Override public void resume()  {}
     @Override public void dispose() {
-        batch.dispose();
-        renderer.dispose();
-        if (engineProc != null) engineProc.destroy();
+        batch.dispose(); renderer.dispose(); if (engineProc!=null) engineProc.destroy();
     }
 }
+
