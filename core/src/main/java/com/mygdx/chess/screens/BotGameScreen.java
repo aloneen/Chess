@@ -115,13 +115,17 @@ public class BotGameScreen implements Screen {
             sendUCI("uci");
             sendUCI("setoption name UCI_LimitStrength value true");
 
-            int elo;
-            switch (difficulty) {
-                case LOW:    elo =  300; break;
-                case MEDIUM: elo =  400; break;
-                default:     elo = 1000; break;
-            }
-            sendUCI("setoption name UCI_Elo value " + elo);
+//            int elo;
+//            switch (difficulty) {
+//                case LOW:    elo =  300; break;
+//                case MEDIUM: elo =  400; break;
+//                default:     elo = 1000; break;
+//            }
+//            sendUCI("setoption name UCI_Elo value " + elo);
+
+            // Stockfish won’t go below ~1350, so use a shallow search instead
+            sendUCI("setoption name UCI_Elo value 1350"); // minimum supported
+
             sendUCI("isready");
             String line;
             while (!(line = engineOut.readLine()).equals("readyok")) {
@@ -172,14 +176,28 @@ public class BotGameScreen implements Screen {
                 Gdx.app.log("BotGame", "Engine_out ▶ " + line);
             }
 
-            // 2) go
-            int ms;
+//            // 2) go
+//            int ms;
+//            switch (difficulty) {
+//                case LOW:    ms = 1500; break;
+//                case MEDIUM: ms =  800; break;
+//                default:     ms =  500; break;
+//            }
+//            sendUCI("go movetime " + ms);
+            // 2) go: force very shallow search on LOW, modest on MEDIUM
             switch (difficulty) {
-                case LOW:    ms = 1500; break;
-                case MEDIUM: ms =  800; break;
-                default:     ms =  500; break;
+                case LOW:
+                    sendUCI("go nodes 1 movetime 1");    // examines only a single search node      // essentially random legal moves
+                    break;
+                case MEDIUM:
+                    sendUCI("go depth 3");       // still quite weak
+                    break;
+                default:
+                    sendUCI("go movetime 500");  // full-strength “Strong” bot
+                    break;
             }
-            sendUCI("go movetime " + ms);
+
+
 
             // 3) read bestmove
             String best = null;
