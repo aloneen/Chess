@@ -12,6 +12,7 @@ import com.mygdx.chess.logic.GameLogic;
 import com.mygdx.chess.memento.GameMemento;
 import com.mygdx.chess.model.IBoardModel;
 import com.mygdx.chess.screens.BotGameScreen;
+import com.mygdx.chess.screens.MainMenuScreen;
 import com.mygdx.chess.screens.PromotionScreen;
 import com.mygdx.chess.screens.GameOverScreen;
 import com.mygdx.chess.sound.SoundManager;
@@ -219,6 +220,11 @@ public class ChessInputProcessor implements InputProcessor, IGameInputProcessor 
 
     @Override
     public boolean keyDown(int keycode) {
+        if (keycode == Input.Keys.ESCAPE) {
+            game.setScreen(new MainMenuScreen(game));
+            return true;
+        }
+
         if (!(game.getScreen() instanceof BotGameScreen)
             && keycode == Input.Keys.R
             && !mementoStack.isEmpty())
