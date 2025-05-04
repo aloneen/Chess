@@ -10,7 +10,9 @@ import com.mygdx.chess.factory.BoardModelFactory;
 import com.mygdx.chess.input.ChessInputProcessor;
 import com.mygdx.chess.input.IGameInputProcessor;
 import com.mygdx.chess.model.IBoardModel;
+import com.mygdx.chess.view.ChessRenderer;
 import com.mygdx.chess.view.IChessRenderer;
+import com.mygdx.chess.view.decorator.CheckDecoratorRenderer;
 
 import static com.mygdx.chess.util.BoardConfig.BOARD_SIZE;
 
@@ -37,7 +39,13 @@ public class GameScreen implements Screen {
         //this.model          = new com.mygdx.chess.model.BoardModel(flipY); <- whitout Factory method.
 
         this.model = BoardModelFactory.createStandardBoard(flipY);
-        this.renderer       = new com.mygdx.chess.view.ChessRenderer(model);
+
+
+        IChessRenderer baseRenderer = new ChessRenderer(model);
+        // оборачиваем его нашим CheckDecoratorRenderer
+        this.renderer = new CheckDecoratorRenderer(baseRenderer, model);
+
+
         this.inputProcessor = new ChessInputProcessor(game, model, camera, renderer);
         Gdx.input.setInputProcessor(inputProcessor);
     }

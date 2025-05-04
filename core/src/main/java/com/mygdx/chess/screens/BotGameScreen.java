@@ -16,6 +16,8 @@ import com.mygdx.chess.model.IBoardModel;
 import com.mygdx.chess.sound.SoundManager;
 import com.mygdx.chess.view.ChessRenderer;
 import com.mygdx.chess.view.IChessRenderer;
+import com.mygdx.chess.view.decorator.CheckDecoratorRenderer;
+
 
 import java.io.BufferedReader;
 import java.io.BufferedWriter;
@@ -56,7 +58,11 @@ public class BotGameScreen implements Screen {
         camera.setToOrtho(false, 800, 800);
 
         model    = BoardModelFactory.createStandardBoard(!humanIsWhite);
-        renderer = new ChessRenderer(model);
+        // создаём «голый» рендерер, как было раньше
+        IChessRenderer baseRenderer = new ChessRenderer(model);
+        // оборачиваем его нашим CheckDecoratorRenderer
+        this.renderer = new CheckDecoratorRenderer(baseRenderer, model);
+
         logic    = model.getGameLogic();
 
         Gdx.input.setInputProcessor(new ChessInputProcessor(
