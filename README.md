@@ -10,7 +10,7 @@ An advanced, full-featured chess game built with [LibGDX](https://libgdx.com/) a
 * **Platform:** Desktop (cross-platform via LibGDX)
 * **Programming Language:** Java
 * **Framework:** LibGDX
-* **Design Patterns:** Factory Method, Strategy, Memento, Adapter, Proxy, Singleton, Decorator, Facade.
+* **Design Patterns:** Factory Method, Strategy, Prototype, Memento, Adapter, Proxy, Singleton, Decorator, Facade.
 
 This project demonstrates a robust, object-oriented architecture implementing the core rules of chess, including:
 
@@ -119,6 +119,9 @@ This project demonstrates a robust, object-oriented architecture implementing th
 * **Strategy Pattern**
 
     * `IMoveValidator` with implementations (`PawnMoveValidator`, `RookMoveValidator`, etc.) encapsulates each piece’s movement logic.
+* **Prototype Pattern**
+
+    * `ChessPiece` Duplicate pieces. 
 * **Memento Pattern**
 
     * Captures and restores game states for undo/redo functionality via `GameMemento`.

@@ -1,5 +1,5 @@
 
-// File: IBoardModel.java
+
 package com.mygdx.chess.model;
 
 import com.mygdx.chess.actors.ChessPiece;

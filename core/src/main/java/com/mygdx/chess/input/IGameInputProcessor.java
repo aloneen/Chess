@@ -1,4 +1,3 @@
-// ==== input/IGameInputProcessor.java ====
 package com.mygdx.chess.input;
 
 import com.badlogic.gdx.InputProcessor;

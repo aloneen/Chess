@@ -3,6 +3,7 @@ package com.mygdx.chess.actors;
 import com.badlogic.gdx.graphics.Texture;
 import com.badlogic.gdx.graphics.g2d.SpriteBatch;
 import com.mygdx.chess.decorator.PieceDecorator;
+import com.mygdx.chess.proxy.TextureProxy;
 
 import java.util.ArrayList;
 import java.util.List;
@@ -31,9 +32,7 @@ public class ChessPiece implements Cloneable {
         this.xPos = xPos;
         this.yPos = yPos;
         this.hasMoved = false;
-        this.texture = new Texture(
-            com.badlogic.gdx.Gdx.files.internal("images/" + color + "_" + type + ".png")
-        );
+        this.texture = TextureProxy.get("images/" + color + "_" + type + ".png");
     }
 
     public void addDecorator(PieceDecorator decorator) {
@@ -75,9 +74,7 @@ public class ChessPiece implements Cloneable {
         batch.draw(texture, posX, posY, pieceSize, pieceSize);
     }
 
-    public void dispose() {
-        texture.dispose();
-    }
+    public void dispose() {}
 
     @Override
     public ChessPiece clone() {
