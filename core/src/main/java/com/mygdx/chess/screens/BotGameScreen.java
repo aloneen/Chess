@@ -1,10 +1,18 @@
 package com.mygdx.chess.screens;
 
 import com.badlogic.gdx.Gdx;
+import com.badlogic.gdx.Input;
+import com.badlogic.gdx.InputMultiplexer;
 import com.badlogic.gdx.Screen;
 import com.badlogic.gdx.graphics.GL20;
 import com.badlogic.gdx.graphics.OrthographicCamera;
 import com.badlogic.gdx.graphics.g2d.SpriteBatch;
+import com.badlogic.gdx.scenes.scene2d.InputEvent;
+import com.badlogic.gdx.scenes.scene2d.InputListener;
+import com.badlogic.gdx.scenes.scene2d.Stage;
+import com.badlogic.gdx.scenes.scene2d.ui.Dialog;
+import com.badlogic.gdx.scenes.scene2d.ui.Skin;
+import com.badlogic.gdx.utils.viewport.ScreenViewport;
 import com.mygdx.chess.ChessGame;
 import com.mygdx.chess.actors.ChessPiece;
 import com.mygdx.chess.decorator.HighlightDecorator;
@@ -37,28 +45,30 @@ public class BotGameScreen implements Screen {
     private final Difficulty difficulty;
     private final ChessEngineAdapter engineAdapter;
 
+    private Stage uiStage;
+    private Skin skin;
+    private Dialog confirmExitDialog;
+
     private final List<String> moveHistory = new ArrayList<>();
     private boolean botThinking = false;
 
     public BotGameScreen(ChessGame game, Difficulty difficulty, boolean humanIsWhite) {
-        this.game = game;
-        this.difficulty = difficulty;
+        this.game         = game;
+        this.difficulty   = difficulty;
         this.humanIsWhite = humanIsWhite;
 
-        batch = new SpriteBatch();
+        batch  = new SpriteBatch();
         camera = new OrthographicCamera();
         camera.setToOrtho(false, 800, 800);
 
-        model = BoardModelFactory.createStandardBoard(!humanIsWhite);
-        IChessRenderer baseRenderer = new ChessRenderer(model);
-        this.renderer = new CheckDecoratorRenderer(baseRenderer, model);
-        logic = model.getGameLogic();
+        model    = BoardModelFactory.createStandardBoard(!humanIsWhite);
+        renderer = new CheckDecoratorRenderer(new ChessRenderer(model), model);
+        logic    = model.getGameLogic();
 
-        Gdx.input.setInputProcessor(new ChessInputProcessor(
-            game, model, camera, renderer
-        ));
+        initUI();            // setup Stage, Skin, Dialog + ESC listener
+        hookInputs();        // combine UI and board input processors
 
-        this.engineAdapter = new StockfishAdapter(difficulty);
+        engineAdapter = new StockfishAdapter(difficulty);
         try {
             engineAdapter.startEngine();
         } catch (Exception e) {
@@ -66,6 +76,43 @@ public class BotGameScreen implements Screen {
             game.setScreen(new GameOverScreen(game, "Failed to start chess engine"));
         }
     }
+
+    private void initUI() {
+        uiStage = new Stage(new ScreenViewport());
+        skin    = new Skin(Gdx.files.internal("skins/uiskin.json"));
+
+        confirmExitDialog = new Dialog("Confirm Exit", skin) {
+            @Override
+            protected void result(Object object) {
+                if ((Boolean) object) {
+                    game.setScreen(new MainMenuScreen(game));
+                }
+            }
+        };
+        confirmExitDialog.text("Return to main menu?");
+        confirmExitDialog.button("Yes", true);
+        confirmExitDialog.button("No", false);
+
+        uiStage.addListener(new InputListener() {
+            @Override
+            public boolean keyDown(InputEvent event, int keycode) {
+                if (keycode == Input.Keys.ESCAPE) {
+                    confirmExitDialog.show(uiStage);
+                    return true;
+                }
+                return false;
+            }
+        });
+    }
+
+    private void hookInputs() {
+        ChessInputProcessor boardInput = new ChessInputProcessor(game, model, camera, renderer);
+        InputMultiplexer mux = new InputMultiplexer();
+        mux.addProcessor(uiStage);
+        mux.addProcessor(boardInput);
+        Gdx.input.setInputProcessor(mux);
+    }
+
 
     // ——————— PUBLIC API ———————
 
@@ -121,6 +168,9 @@ public class BotGameScreen implements Screen {
             botThinking = true;
             new Thread(this::thinkAndMove).start();
         }
+
+        uiStage.act(delta);
+        uiStage.draw();
     }
 
     private void thinkAndMove() {
@@ -278,7 +328,7 @@ public class BotGameScreen implements Screen {
         recordHumanMove(fx, fy, tx, ty, newType.toLowerCase().charAt(0));
         logic.toggleTurn();
         botThinking = false;
-        Gdx.input.setInputProcessor(new ChessInputProcessor(game, model, camera, renderer));
+        hookInputs();
     }
 
     private ChessPiece findPieceAt(int x, int y) {
@@ -316,5 +366,8 @@ public class BotGameScreen implements Screen {
         batch.dispose();
         renderer.dispose();
         engineAdapter.stopEngine();
+
+        uiStage.dispose();
+        skin.dispose();
     }
 }
