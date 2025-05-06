@@ -42,7 +42,7 @@ public class GameScreen implements Screen {
 
 
         IChessRenderer baseRenderer = new ChessRenderer(model);
-        // оборачиваем его нашим CheckDecoratorRenderer
+
         this.renderer = new CheckDecoratorRenderer(baseRenderer, model);
 
 

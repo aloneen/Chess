@@ -57,10 +57,20 @@ public class MainMenuScreen implements Screen {
             }
         });
 
+        TextButton settingsBtn = new TextButton("Settings", skin);
+        settingsBtn.addListener(new ClickListener() {
+            @Override public void clicked(InputEvent e, float x, float y) {
+                game.setScreen(new SettingsScreen(game));
+            }
+        });
+
+
+
         table.add(title).padBottom(40f).row();
         table.add(whiteBtn).width(200).pad(10).row();
         table.add(blackBtn).width(200).pad(10).row();
-        table.add(vsBotBtn).width(200).pad(10);
+        table.add(vsBotBtn).width(200).pad(10).row();
+        table.add(settingsBtn).width(200).pad(10);
     }
 
     @Override public void show()                 { Gdx.input.setInputProcessor(stage); }

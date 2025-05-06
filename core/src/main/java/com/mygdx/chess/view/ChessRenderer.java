@@ -1,6 +1,7 @@
 package com.mygdx.chess.view;
 
 import com.badlogic.gdx.Gdx;
+import com.badlogic.gdx.Preferences;
 import com.badlogic.gdx.graphics.Texture;
 import com.badlogic.gdx.graphics.g2d.SpriteBatch;
 import com.mygdx.chess.actors.ChessPiece;
@@ -20,9 +21,14 @@ public class ChessRenderer implements IChessRenderer {
 
     public ChessRenderer(IBoardModel model) {
         this.model    = model;
-//        this.boardTex = new Texture(Gdx.files.internal("images/chess_board.png"));
-//        this.dotTex   = new Texture(Gdx.files.internal("images/move_indicator.png"));
-        this.boardTex = TextureProxy.get("images/chess_board.png");
+
+        // Load chosen theme (default to "classic")
+        Preferences prefs = Gdx.app.getPreferences("chess_settings");
+        String theme = prefs.getString("boardTheme", "classic");
+        // Expect files: images/classic_board.png, images/stone_board.png, images/marble_board.png
+        String boardPath = "images/" + theme + "_board.png";
+
+        this.boardTex = TextureProxy.get(boardPath);
         this.dotTex   = TextureProxy.get("images/move_indicator.png");
     }
 
