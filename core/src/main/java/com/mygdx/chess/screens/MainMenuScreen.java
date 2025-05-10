@@ -64,12 +64,21 @@ public class MainMenuScreen implements Screen {
             }
         });
 
+        TextButton historyBtn = new TextButton("Game History", skin);
+        historyBtn.addListener(new ClickListener() {
+            @Override public void clicked(InputEvent e, float x, float y) {
+                game.setScreen(new GameHistoryScreen(game));
+            }
+        });
+
+
 
 
         table.add(title).padBottom(40f).row();
         table.add(whiteBtn).width(200).pad(10).row();
         table.add(blackBtn).width(200).pad(10).row();
         table.add(vsBotBtn).width(200).pad(10).row();
+        table.add(historyBtn).width(200).pad(10).row();
         table.add(settingsBtn).width(200).pad(10);
     }
 
