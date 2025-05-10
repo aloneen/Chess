@@ -73,7 +73,7 @@ public class BotGameScreen implements Screen {
             engineAdapter.startEngine();
         } catch (Exception e) {
             Gdx.app.error("BotGame", "Failed to initialize chess engine", e);
-            game.setScreen(new GameOverScreen(game, "Failed to start chess engine"));
+            game.setScreen(new MainMenuScreen(game));
         }
     }
 
@@ -314,9 +314,9 @@ public class BotGameScreen implements Screen {
         // Check game end conditions
         String next = logic.isWhiteTurn() ? "white" : "black";
         if (logic.isCheckmate(next, pieces)) {
-            game.setScreen(new GameOverScreen(game, "Checkmate! " + (next.equals("white") ? "Black" : "White") + " wins."));
+            game.setScreen(new GameOverScreen(game, "Checkmate! " + (next.equals("white") ? "Black" : "White") + " wins.", (next.equals("white") ? "Black" : "White"), true, !humanIsWhite));
         } else if (logic.isStalemate(next, pieces)) {
-            game.setScreen(new GameOverScreen(game, "Stalemate! The game is a draw."));
+            game.setScreen(new GameOverScreen(game, "Stalemate! The game is a draw.", "Stalemate", true, !humanIsWhite));
         }
     }
 

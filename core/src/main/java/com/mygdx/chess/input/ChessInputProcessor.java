@@ -198,11 +198,11 @@ public class ChessInputProcessor implements InputProcessor, IGameInputProcessor 
             if (logic.isCheckmate(next, pieces)) {
                 String winner = next.equals("white") ? "Black" : "White";
                 game.setScreen(new GameOverScreen(
-                    game, "Checkmate! " + winner + " wins."
+                    game, "Checkmate! " + winner + " wins.", winner, false, false
                 ));
             } else if (logic.isStalemate(next, pieces)) {
                 game.setScreen(new GameOverScreen(
-                    game, "Stalemate! The game is a draw."
+                    game, "Stalemate! The game is a draw.", "Stalemate!", false, false
                 ));
             }
 

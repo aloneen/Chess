@@ -14,16 +14,23 @@ import com.badlogic.gdx.scenes.scene2d.utils.ClickListener;
 import com.badlogic.gdx.utils.Align;
 import com.badlogic.gdx.utils.viewport.ScreenViewport;
 import com.mygdx.chess.ChessGame;
+import com.mygdx.chess.db.GameResultDAO;
 
 public class GameOverScreen implements Screen {
     private final ChessGame game;
     private final Stage stage;
     private final Skin skin;
 
-    public GameOverScreen(ChessGame game, String message) {
+    public GameOverScreen(ChessGame game, String message, String winner, boolean vsBot, boolean botIsWhite) {
         this.game  = game;
         this.stage = new Stage(new ScreenViewport());
         this.skin  = new Skin(Gdx.files.internal("skins/uiskin.json"));
+
+        GameResultDAO.saveGameResult(
+            winner,
+            vsBot ? (botIsWhite ? "White" : "Black") : "None",
+            vsBot ? "Bot" : "PvP"
+        );
 
         Image bg = new Image(new com.badlogic.gdx.graphics.Texture(
             Gdx.files.internal("images/main_bg.jpg")));
